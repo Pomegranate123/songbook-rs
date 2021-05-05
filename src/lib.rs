@@ -6,17 +6,18 @@ use crate::util::{
 };
 use lazy_static::lazy_static;
 use regex::Regex;
-use std::cmp::Ordering;
-use std::error::Error;
-use std::fs;
-use std::io;
+use std::{
+    cmp::{min, Ordering},
+    error::Error,
+    fs, io,
+};
 use termion::{event::Key, raw::IntoRawMode};
 use tui::{
     backend::TermionBackend,
     layout::{Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
     text::{Span, Spans, Text},
-    widgets::{Block, Borders, List, ListItem, Paragraph, Wrap},
+    widgets::{Block, Borders, List, ListItem, Paragraph},
     Terminal,
 };
 
@@ -185,7 +186,10 @@ impl<'a> App<'a> {
     fn new() -> App<'a> {
         App {
             items: StatefulList::with_items(
-                search().iter().map(|s| ListItem::new(s.clone())).collect(),
+                search()
+                    .iter()
+                    .map(|s| ListItem::new(String::from(s)))
+                    .collect(),
             ),
             search: search(),
             song: None,
@@ -220,6 +224,7 @@ pub fn run() -> Result<(), Box<dyn Error>> {
         let search = app.search.clone();
         let selected = app.items.state.selected();
         app.view_song(selected);
+
         term.draw(|t| {
             let layout = Layout::default()
                 .direction(Direction::Horizontal)
@@ -233,16 +238,37 @@ pub fn run() -> Result<(), Box<dyn Error>> {
                 .block(Block::default().title("Search").borders(Borders::ALL))
                 .highlight_style(Style::default().bg(Color::DarkGray));
 
-            let song = app.song.clone().unwrap_or_default();
-            let paragraph = Paragraph::new(Text::from(song.text))
-                .block(
-                    Block::default()
-                        .title(Span::styled(song.title.unwrap_or_default(), *TITLE_STYLE))
-                        .borders(Borders::ALL),
-                )
-                .wrap(Wrap { trim: false });
             t.render_stateful_widget(songlist, layout[0], &mut app.items.state);
-            t.render_widget(paragraph, layout[1]);
+
+            let mut song = app.song.clone().unwrap_or_default();
+            let song_block = Block::default()
+                .title(song.title.unwrap_or_default())
+                .borders(Borders::ALL);
+
+            let song_rect = song_block.inner(layout[1]);
+
+            let linecount = song.text.len();
+            let height = song_rect.height as usize;
+
+            let columncount = linecount / height + 1;
+
+            let mut constraints = vec![];
+            for _ in 0..columncount {
+                constraints.push(Constraint::Percentage(100 / columncount as u16))
+            }
+
+            let song_layout = Layout::default()
+                .direction(Direction::Horizontal)
+                .margin(1)
+                .constraints(constraints.as_ref())
+                .split(layout[1]);
+
+            for column in song_layout.iter() {
+                let song_temp = song.text.split_off(min(height, song.text.len()));
+                t.render_widget(Paragraph::new(Text::from(song.text)), *column);
+                song.text = song_temp;
+            }
+            t.render_widget(song_block, layout[1]);
         })?;
 
         match events.next()? {
