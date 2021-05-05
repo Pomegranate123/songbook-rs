@@ -1,0 +1,106 @@
+{title:Opw 789  Bm}
+{subtitle:Lopen op het water (Oceans)}
+{key:Bm}
+{c:Tempo 68} 
+{metronome:68}
+{c:Maat 4/4}
+{c:OPW OK, met 1 extra bridge}
+{tag:livestream}
+
+{c:>> Nog aanpassen op OPW 'dubbel tempo' <<}
+
+{c:geen drums, geen bas}
+{c:gitaar tokkelen}
+{c:piano 1 akkoord per maat}
+[Bm] [A/C#] [|] [D] [|] [A] [|] [G] [|]
+
+1. [Bm]U leert me lopen [A/C#]op het wa[|][D]ter
+de oce[|][A]aan is weids en di[|][G2]ep
+[|][Bm]u vraagt me alles [A/C#]los te la[|][D]ten
+daar vind ik [|][A]U, en ik twijfel ni[|][G2]et.
+
+{c:Refrein:}
+{soc}
+[|][G] En als de g[D]olven oversla[|][A]an
+[|][G] dan blijf ik h[D]open op uw Na[|][A]am
+Mijn ziel vindt ru[|][G]st
+want in de st[D]orm bent u dichtb[|][A]ij
+Ik ben van U[|][G], en U[A] van 
+{c:+bas +toms}
+mi[|][Bm]j. [A/C#] [|][D] [|][A] [|][G2]
+{eoc}
+
+
+2. [Bm]De diepste zee is [A/C#]vol gen[D]ade
+uw sterke [A]hand die houdt mij v[G2]ast
+[Bm]en als mijn voeten [A/C#]zouden f[D]alen
+dan faalt U [A]niet, want Uw trouw houdt st[G2]and
+
+{soc}
+{c:Refrein:}
+{c:background vocals unisono}
+{c: +drums}
+[|][G] En als de g[D]olven oversla[|][A]an
+[|][G] dan blijf ik h[D]open op uw Na[|][A]am
+Mijn ziel vindt ru[|][G]st
+want in de st[D]orm bent u dichtb[|][A]ij
+Ik ben van U[|][G], 
+en U[A] van
+{c:stevig}
+ mi[|][Bm]j.  [A/C#](Oh - [|][D]oh- [|][A]-oh) [|][G] 
+{eoc}
+
+{c:Instrumental:}
+(En u van [|][Bm]mij. [A/C#]Oh -  [|] [D]oh- [|][A]oh) [|] [Em] [|]
+
+{c:rustig, geen percussie, geen bas}
+{c:piano 1 akkoord per maat}
+[Bm] [|][G] [|] [D] [|] [A] [|] 
+{new_page}
+
+[Bm] [|] [G] [|] [D] [|] [A] [|]
+
+{c:Bridge, rustig:}
+
+[|][Bm] Geest van God leer mij te g[|][G]aan over de golven
+in vertr[|][D]ouwen u te volgen
+te [|][A]gaan waar U mij heen leidt
+[|][Bm] Leid me verder dan mijn vo[|][G]eten kunnen dragen
+ik vertr[|][D]ouw op uw genade
+want ik [|][A]ben in uw nabijheid
+
+{c:Bridge, met drums/tamboerijn}
+{c:bas:1 noot per maat}
+[|][G] Geest van God leer mij te g[|][D]aan over de golven
+in vertr[|][A]ouwen u te volgen
+te [|][Em]gaan waar U mij heen leidt
+[|][G] Leid me verder dan mijn vo[|][D]eten kunnen dragen
+ik vertr[|][A]ouw op uw genade
+want ik [|][Em]ben in uw nabijheid
+
+{c:Bridge, stevig:}
+{c:bas: 4 kwartnoten per maat}
+{c:background vocals unisono}
+[|][Bm] Geest van God leer m[A/C#]ij te g[|][D]aan over de golven
+in vertr[|][A]ouwen u te volgen
+te [|][Em]gaan waar U mij heen leidt
+[|][Bm] Leid me verder d[A/C#]an mijn vo[|][D]eten kunnen dragen
+ik vertr[|][A]ouw op uw genade
+want ik [|][Em]ben in uw nabijheid
+
+{c:Instrumental, stevig:}
+
+[Bm] [|][G] [|] [D] [|] [A] [|] 
+[Bm] [|] [G] [|] [D] [|] [A] [|]
+
+
+{soc}
+{c:Refrein:}
+{c:geen percussie, geen bas}
+[|][G] En als de g[D]olven oversla[|][A]an
+[|][G] dan blijf ik h[D]open op uw Na[|][A]am
+Mijn ziel vindt ru[|][G]st
+want in de st[D]orm bent u dichtb[|][A]ij
+Ik ben van U[|][G], en U[A] van mi[|][Bm]j
+ [A/C#] [|][D] [|][A] [|][G]
+{eoc]

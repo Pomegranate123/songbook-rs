@@ -1,0 +1,14 @@
+[package]
+name = "gpro"
+version = "0.1.0"
+authors = ["Pomegranate123 <elias@hoste.info>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+regex = { version = "1.1.8", features = ["pattern"] }
+tui = "0.15"
+termion = "1.5"
+rand = "*"
+lazy_static = "*"
