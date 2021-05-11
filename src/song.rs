@@ -12,9 +12,10 @@ lazy_static! {
 
 #[derive(Debug, Default, Clone)]
 pub struct Song<'a> {
-    pub title: Option<String>,
-    pub subtitle: Option<String>,
-    pub key: Option<String>,
+    pub title: String,
+    pub subtitle: String,
+    pub key: String,
+    pub songstring: String,
     pub text: Vec<Spans<'a>>,
 }
 
@@ -22,7 +23,10 @@ impl<'a> Song<'a> {
     pub fn new(songstring: String, theme: &Theme) -> Self {
         let songstring = RE_NEWLINES.replace_all(&songstring, "\n");
 
-        let mut song = Song::default();
+        let mut song = Song {
+            songstring: songstring.to_string(),
+            ..Default::default()
+        };
 
         let mut chorus = false;
         let mut comment = false;
@@ -33,12 +37,12 @@ impl<'a> Song<'a> {
                 match RE_TAGS.captures(&section) {
                     Some(cap) => match cap.get(1).unwrap().as_str() {
                         "t" | "title" => {
-                            song.title = Some(String::from(cap.get(2).unwrap().as_str().trim()));
+                            song.title = String::from(cap.get(2).unwrap().as_str().trim());
                             continue 'lines;
                         }
                         "st" | "subtitle" => {
                             let subtitle = String::from(cap.get(2).unwrap().as_str().trim());
-                            song.subtitle = Some(subtitle.clone());
+                            song.subtitle = subtitle.clone();
                             song.text
                                 .push(Spans::from(Span::styled(subtitle, theme.title)));
                             continue 'lines;
@@ -46,7 +50,7 @@ impl<'a> Song<'a> {
                         "key" => {
                             let key =
                                 String::from("Toonsoort ") + cap.get(2).unwrap().as_str().trim();
-                            song.key = Some(key.clone());
+                            song.key = key.clone();
                             song.text
                                 .push(Spans::from(Span::styled(key, theme.comment)));
                             continue 'lines;

@@ -6,9 +6,9 @@ mod util;
 
 use crate::{
     app::App,
-    util::event::{Event, Events},
+    util::event::{Config, Event, Events},
 };
-use std::{error::Error, io};
+use std::{error::Error, io, time::Duration};
 use termion::{event::Key, raw::IntoRawMode};
 use tui::{
     backend::TermionBackend,
@@ -20,15 +20,15 @@ fn main() -> Result<(), Box<dyn Error>> {
     let stdout = io::stdout().into_raw_mode()?;
     let backend = TermionBackend::new(stdout);
     let mut term = Terminal::new(backend)?;
-    let events = Events::new();
+    let events = Events::with_config(Config {
+        exit_key: Key::Esc,
+        tick_rate: Duration::from_millis(250),
+    });
 
     let mut app = App::new();
 
     term.clear().unwrap();
     loop {
-        let selected = app.items.state.selected();
-        app.load_song(selected);
-
         term.draw(|f| {
             let layout = Layout::default()
                 .direction(Direction::Horizontal)
@@ -42,11 +42,41 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         match events.next()? {
             Event::Input(key) => match key {
-                Key::Char('q') => break,
-                Key::Down => app.items.next(1),
-                Key::PageDown => app.items.next(20),
-                Key::Up => app.items.previous(1),
-                Key::PageUp => app.items.previous(20),
+                Key::Esc => break,
+                Key::Down => {
+                    app.songlist.next(1);
+                    app.load_song(app.songlist.selected());
+                }
+                Key::PageDown => {
+                    app.songlist.next(20);
+                    app.load_song(app.songlist.selected());
+                }
+                Key::Up => {
+                    app.songlist.previous(1);
+                    app.load_song(app.songlist.selected());
+                }
+                Key::PageUp => {
+                    app.songlist.previous(20);
+                    app.load_song(app.songlist.selected());
+                }
+                Key::Char(c) => {
+                    app.input.push(c);
+                    app.songlist.items = app.search_songs(&app.input);
+                    let len_results = app.songlist.items.len();
+                    if let Some(index) = app.songlist.selected() {
+                        if index >= len_results {
+                            if app.songlist.items.is_empty() {
+                                app.songlist.select(None);
+                            } else {
+                                app.songlist.select(Some(len_results - 1));
+                            }
+                        }
+                    }
+                }
+                Key::Backspace => {
+                    app.input.pop();
+                    app.songlist.items = app.search_songs(&app.input);
+                }
                 _ => (),
             },
             Event::Tick => (),

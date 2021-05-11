@@ -1,32 +1,50 @@
 use crate::{conf::Config, song::Song, util::StatefulList};
-use std::fs;
-use tui::widgets::ListItem;
+use std::{collections::HashMap, fs};
 
 pub struct App<'a> {
-    pub items: StatefulList<ListItem<'a>>,
-    pub search: Vec<String>,
+    pub songlist: StatefulList<String>,
+    pub songs: HashMap<String, String>,
     pub song: Option<Song<'a>>,
-    pub selected_index: Option<usize>,
     pub config: Config,
+    pub input: String,
 }
 
 impl<'a> App<'a> {
     pub fn new() -> App<'a> {
+        let mut items: Vec<String> = App::list_songs()
+            .iter()
+            .map(|s| String::from(s.0))
+            .collect();
+        items.sort();
         App {
-            items: StatefulList::with_items(
-                App::search_songs()
-                    .iter()
-                    .map(|s| ListItem::new(String::from(s)))
-                    .collect(),
-            ),
-            search: App::search_songs(),
+            songlist: StatefulList::with_items(items),
+            songs: App::list_songs(),
             song: None,
-            selected_index: None,
             config: Config::default(),
+            input: String::default(),
         }
     }
 
-    fn search_songs() -> Vec<String> {
+    pub fn search_songs(&self, query: &str) -> Vec<String> {
+        let mut results: Vec<String>;
+        results = self
+            .songs
+            .iter()
+            .filter_map(|(f, s)| {
+                if s.to_lowercase().contains(&query.to_lowercase())
+                    | f.to_lowercase().contains(&query.to_lowercase())
+                {
+                    Some(f.clone())
+                } else {
+                    None
+                }
+            })
+            .collect();
+        results.sort();
+        results
+    }
+
+    fn list_songs() -> HashMap<String, String> {
         let mut paths: Vec<_> = fs::read_dir("/home/pomegranate/Dropbox/Songbook/NL Selectie")
             .unwrap()
             .map(|dir| dir.unwrap())
@@ -34,22 +52,22 @@ impl<'a> App<'a> {
         paths.sort_by_key(|dir| dir.path());
         paths
             .iter()
-            .filter_map(|f| match f.file_name().into_string() {
-                Ok(file) => Some(file.trim_end_matches(".txt").to_string()),
-                Err(_) => None,
+            .map(|f| {
+                (
+                    String::from(f.file_name().to_str().unwrap().trim_end_matches(".txt")),
+                    fs::read_to_string(f.path()).unwrap(),
+                )
             })
             .collect()
     }
 
     pub fn load_song(&mut self, selected: Option<usize>) {
-        if self.selected_index != selected {
-            if let Some(index) = selected {
-                let songstring = &self.search[index];
-                let path = String::from("/home/pomegranate/Dropbox/Songbook/NL Selectie/")
-                    + &songstring[..]
-                    + ".txt";
-                let file = fs::read_to_string(path).unwrap();
-                self.song = Some(Song::new(file, &self.config.theme));
+        if let Some(index) = selected {
+            match self.songlist.items.get(index) {
+                Some(song) => {
+                    self.song = Some(Song::new(self.songs[song].clone(), &self.config.theme))
+                }
+                None => self.songlist.select(None),
             }
         }
     }

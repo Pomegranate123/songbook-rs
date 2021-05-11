@@ -13,13 +13,27 @@ pub fn draw_search_list<B>(f: &mut Frame<B>, app: &mut App, layout_chunk: Rect)
 where
     B: Backend,
 {
-    let search = app.search.clone();
-    let searchresults: Vec<ListItem> = search.iter().map(|s| ListItem::new(s.as_ref())).collect();
+    let layout = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Max(100), Constraint::Length(3)])
+        .split(layout_chunk);
+
+    let list = app.songlist.items.clone();
+    let searchresults: Vec<ListItem> = list.iter().map(|s| ListItem::new(s.as_ref())).collect();
     let songlist = List::new(searchresults)
-        .block(Block::default().title("Search").borders(Borders::ALL))
+        .block(Block::default().title("Songs").borders(Borders::ALL))
         .highlight_style(Style::default().bg(Color::DarkGray));
 
-    f.render_stateful_widget(songlist, layout_chunk, &mut app.items.state);
+    f.render_stateful_widget(songlist, layout[0], &mut app.songlist.state);
+
+    let input = Text::from(app.input.clone());
+    let search = Paragraph::new(input).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .title(Span::from("Search")),
+    );
+
+    f.render_widget(search, layout[1]);
 }
 
 pub fn draw_song_block<B>(f: &mut Frame<B>, app: &App, layout_chunk: Rect)
@@ -28,10 +42,7 @@ where
 {
     let mut song = app.song.clone().unwrap_or_default();
     let song_block = Block::default()
-        .title(Span::styled(
-            song.title.unwrap_or_default(),
-            app.config.theme.title,
-        ))
+        .title(Span::styled(song.title, app.config.theme.title))
         .borders(Borders::ALL);
 
     let song_rect = song_block.inner(layout_chunk);

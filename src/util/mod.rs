@@ -29,31 +29,50 @@ impl<T> StatefulList<T> {
             Some(i) => {
                 let loc = i + amount;
                 if loc > self.items.len() - 1 {
-                    loc - self.items.len()
+                    Some(loc - self.items.len())
                 } else {
-                    loc
+                    Some(loc)
                 }
             }
-            None => 0,
+            None => {
+                if self.items.is_empty() {
+                    None
+                } else {
+                    Some(0)
+                }
+            }
         };
-        self.state.select(Some(i));
+        self.state.select(i);
     }
 
     pub fn previous(&mut self, amount: usize) {
         let i = match self.state.selected() {
             Some(i) => {
                 if amount > i {
-                    i + self.items.len() - amount
+                    Some(i + self.items.len() - amount)
                 } else {
-                    i - amount
+                    Some(i - amount)
                 }
             }
-            None => 0,
+            None => {
+                if self.items.is_empty() {
+                    None
+                } else {
+                    Some(0)
+                }
+            }
         };
-        self.state.select(Some(i));
+        self.state.select(i);
     }
 
-    pub fn unselect(&mut self) {
+    pub fn select(&mut self, select: Option<usize>) {
+        // Because the state expects item in between the newly selected item and the origin (which aren't always there)
+        // we have to select None briefly in order to reset the 'offset' variable in self.state.
         self.state.select(None);
+        self.state.select(select);
+    }
+
+    pub fn selected(&self) -> Option<usize> {
+        self.state.selected()
     }
 }
