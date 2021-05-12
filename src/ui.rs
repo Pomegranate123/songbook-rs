@@ -52,6 +52,8 @@ where
 
     let columncount = linecount / height + 1;
 
+    //TODO: Make constraints minimum of the longest line in the column
+
     let mut constraints = vec![];
     for _ in 0..columncount {
         constraints.push(Constraint::Percentage(100 / columncount as u16))

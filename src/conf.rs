@@ -1,12 +1,14 @@
 use tui::style::{Color, Modifier, Style};
 
 pub struct Config {
+    pub path: String,
     pub theme: Theme,
 }
 
 impl Default for Config {
     fn default() -> Self {
         Config {
+            path: String::from("/home/pomegranate/Dropbox/Songbook"),
             theme: Theme::default(),
         }
     }

@@ -19,6 +19,7 @@ use tui::{
 fn main() -> Result<(), Box<dyn Error>> {
     let stdout = io::stdout().into_raw_mode()?;
     let backend = TermionBackend::new(stdout);
+
     let mut term = Terminal::new(backend)?;
     let events = Events::with_config(Config {
         exit_key: Key::Esc,
