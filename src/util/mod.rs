@@ -2,29 +2,86 @@
 
 pub mod event;
 
+use std::collections::HashMap;
 use tui::widgets::ListState;
 
-pub struct StatefulList<T> {
-    pub state: ListState,
-    pub items: Vec<T>,
+#[derive(PartialEq, Eq, Hash, Clone)]
+pub enum FolderEntry {
+    Folder(String),
+    File(String),
 }
 
-impl<T> StatefulList<T> {
-    pub fn new() -> StatefulList<T> {
+impl FolderEntry {
+    pub fn get(&self) -> String {
+        match self {
+            FolderEntry::Folder(path) => path.to_owned(),
+            FolderEntry::File(name) => name.to_owned(),
+        }
+    }
+}
+
+impl Default for FolderEntry {
+    fn default() -> Self {
+        FolderEntry::File(String::default())
+    }
+}
+
+#[derive(Default)]
+pub struct StatefulList {
+    pub state: ListState,
+    pub items: Vec<FolderEntry>,
+    pub item_map: HashMap<FolderEntry, String>,
+}
+
+impl StatefulList {
+    pub fn new() -> StatefulList {
         StatefulList {
             state: ListState::default(),
             items: Vec::new(),
+            item_map: HashMap::new(),
         }
     }
 
-    pub fn with_items(items: Vec<T>) -> StatefulList<T> {
+    pub fn with_items(
+        items: Vec<FolderEntry>,
+        item_map: HashMap<FolderEntry, String>,
+    ) -> StatefulList {
         StatefulList {
             state: ListState::default(),
             items,
+            item_map,
         }
     }
 
-    pub fn next(&mut self, amount: usize) {
+    pub fn with_items_sorted(
+        mut items: Vec<FolderEntry>,
+        item_map: HashMap<FolderEntry, String>,
+    ) -> Self {
+        //let mut items: Vec<_> = item_map.iter().map(|s| String::from(s.0)).collect();
+        items.sort_by_key(|f| f.get());
+        Self::with_items(items, item_map)
+    }
+
+    pub fn search(&mut self, query: &str) {
+        let mut results: Vec<FolderEntry>;
+        results = self
+            .item_map
+            .iter()
+            .filter_map(|(k, v)| {
+                if k.get().to_lowercase().contains(&query.to_lowercase())
+                    | v.to_lowercase().contains(&query.to_lowercase())
+                {
+                    Some(k.clone())
+                } else {
+                    None
+                }
+            })
+            .collect();
+        results.sort_by_key(|f| f.get());
+        self.items = results;
+    }
+
+    pub fn forward(&mut self, amount: usize) {
         let i = match self.state.selected() {
             Some(i) => {
                 let loc = i + amount;
@@ -45,7 +102,7 @@ impl<T> StatefulList<T> {
         self.state.select(i);
     }
 
-    pub fn previous(&mut self, amount: usize) {
+    pub fn back(&mut self, amount: usize) {
         let i = match self.state.selected() {
             Some(i) => {
                 if amount > i {

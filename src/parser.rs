@@ -1,4 +1,4 @@
-use crate::conf::Theme;
+use crate::{conf::Theme, util::FolderEntry};
 use lazy_static::lazy_static;
 use regex::Regex;
 use std::cmp::Ordering;
@@ -111,21 +111,15 @@ impl<'a> Song<'a> {
                     match difference.cmp(&0) {
                         Ordering::Less => {
                             // Chords are longer than lyrics
-                            let mut delimiter = '-';
-                            match lyrics_string.chars().last() {
-                                Some(' ') | Some(',') | Some('.') | Some(':') | Some(';')
-                                | None => delimiter = ' ',
-                                _ => (),
-                            }
-                            for _ in 0..-difference {
-                                lyrics_string.push(delimiter);
-                            }
+                            let delimiter = match lyrics_string.chars().last().unwrap_or(' ') {
+                                ' ' | ',' | '.' | ':' | ';' => " ",
+                                _ => "-",
+                            };
+                            lyrics_string.push_str(&delimiter.repeat(-difference as usize));
                         }
                         Ordering::Greater => {
                             // Lyrics are longer than chords
-                            for _ in 0..difference {
-                                chords_string.push(' ');
-                            }
+                            chords_string.push_str(&" ".repeat(difference as usize));
                         }
                         Ordering::Equal => {}
                     }
@@ -159,5 +153,46 @@ impl<'a> Song<'a> {
             result.push(&text[last..]);
         }
         result
+    }
+
+    pub fn get_name(songstring: &str) -> String {
+        let songstring = RE_NEWLINES.replace_all(songstring, "\n");
+        let mut title = String::from("Untitled");
+        let mut subtitle = String::new();
+
+        for line in songstring.lines() {
+            for section in Song::regex_split_keep(&RE_TAGS, &line) {
+                if let Some(cap) = RE_TAGS.captures(&section) {
+                    match cap.get(1).unwrap().as_str() {
+                        "t" | "title" => title = String::from(cap.get(2).unwrap().as_str().trim()),
+                        "st" | "subtitle" => {
+                            subtitle = String::from(cap.get(2).unwrap().as_str().trim())
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+        if subtitle.is_empty() {
+            return title;
+        }
+        format!("{} - {}", title, subtitle)
+    }
+}
+
+pub struct Playlist {
+    pub title: String,
+    pub songs: Vec<FolderEntry>,
+    pub playliststring: String,
+}
+
+impl Playlist {
+    pub fn new(playliststring: String) -> Self {
+        let mut lines = playliststring.lines();
+        Playlist {
+            title: lines.next().unwrap().to_string(),
+            songs: lines.map(|s| FolderEntry::File(s.to_string())).collect(),
+            playliststring,
+        }
     }
 }
