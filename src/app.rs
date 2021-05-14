@@ -3,29 +3,19 @@ use crate::{
     parser::{Playlist, Song},
     util::{FolderEntry, StatefulList},
 };
+use lazy_static::lazy_static;
+use regex::Regex;
 use std::{collections::HashMap, fs};
 
-#[derive(PartialEq)]
-pub enum AppState {
-    Songs,
-    Playlists,
-    Playlist,
-}
-
-impl Default for AppState {
-    fn default() -> Self {
-        AppState::Songs
-    }
+lazy_static! {
+    static ref RE_SONG_TRANSPOSITION: Regex = Regex::new(r" \[([ABCDEFG][b#]?)\]").unwrap();
 }
 
 #[derive(Default)]
 pub struct App<'a> {
-    pub songs: StatefulList,
-    pub playlists: StatefulList,
-    pub playlist: StatefulList,
+    pub files: StatefulList,
     pub filemap: HashMap<FolderEntry, String>,
     pub config: Config,
-    pub state: AppState,
     pub song: Option<Song<'a>>,
     pub searching: bool,
     pub input: String,
@@ -35,68 +25,13 @@ pub struct App<'a> {
 impl<'a> App<'a> {
     pub fn new(config: Config) -> Self {
         App {
-            songs: StatefulList::with_items_sorted(App::list_songs(&config.path)),
-            playlists: StatefulList::with_items_sorted(App::list_playlists(&config.path)),
+            files: StatefulList::with_items_sorted(App::list_files(&config.path)),
             filemap: App::map_files(&config.path),
             config,
             ..Default::default()
         }
     }
 
-    fn list_songs(path: &str) -> Vec<FolderEntry> {
-        let mut files: Vec<_> = fs::read_dir(path)
-            .unwrap()
-            .map(|dir| dir.unwrap())
-            .collect();
-        files.sort_by_key(|dir| dir.path());
-        files
-            .iter()
-            .filter_map(|file| {
-                let filename = file.file_name();
-                let filename = filename.to_str().unwrap();
-                if file.path().is_dir() {
-                    Some(FolderEntry::Folder(filename.to_owned()))
-                } else if filename.ends_with(".txt") {
-                    Some(FolderEntry::File(Song::get_name(
-                        &fs::read_to_string(file.path()).unwrap(),
-                    )))
-                } else {
-                    None
-                }
-            })
-            .collect()
-    }
-
-    //    fn map_songs(config: &Config) -> HashMap<FolderEntry, String> {
-    //        let mut files: Vec<_> = fs::read_dir(&config.path)
-    //            .unwrap()
-    //            .flat_map(|dir| {
-    //                if dir.as_ref().unwrap().path().is_dir() {
-    //                    fs::read_dir(dir.unwrap().path())
-    //                        .unwrap()
-    //                        .map(|dir| dir.unwrap())
-    //                        .collect()
-    //                } else {
-    //                    vec![dir.unwrap()]
-    //                }
-    //            })
-    //            .collect();
-    //        files.sort_by_key(|dir| dir.path());
-    //        files
-    //            .iter()
-    //            .filter_map(|file| {
-    //                let filename = file.file_name();
-    //                let filename = filename.to_str().unwrap();
-    //                let filestring = fs::read_to_string(file.path()).unwrap();
-    //                if filename.ends_with(".txt") {
-    //                    Some((Song::get_name(&filestring), filestring))
-    //                } else {
-    //                    None
-    //                }
-    //            })
-    //            .collect()
-    //    }
-    //
     fn map_files(path: &str) -> HashMap<FolderEntry, String> {
         let mut files: Vec<_> = fs::read_dir(path)
             .unwrap()
@@ -124,11 +59,11 @@ impl<'a> App<'a> {
                     ))
                 } else if filename.ends_with(".txt") {
                     let filestring = fs::read_to_string(file.path()).unwrap();
-                    Some((FolderEntry::File(Song::get_name(&filestring)), filestring))
+                    Some((FolderEntry::Song(Song::get_name(&filestring)), filestring))
                 } else if filename.ends_with(".lst") {
                     let filestring = fs::read_to_string(file.path()).unwrap();
                     Some((
-                        FolderEntry::File(filename.trim_end_matches(".lst").to_owned()),
+                        FolderEntry::Playlist(filename.trim_end_matches(".lst").to_owned()),
                         filestring,
                     ))
                 } else {
@@ -138,25 +73,25 @@ impl<'a> App<'a> {
             .collect()
     }
 
-    fn list_playlists(path: &str) -> Vec<FolderEntry> {
-        let mut paths: Vec<_> = fs::read_dir(path)
+    fn list_files(path: &str) -> Vec<FolderEntry> {
+        let mut files: Vec<_> = fs::read_dir(path)
             .unwrap()
-            .filter_map(|dir| {
-                if dir.as_ref().unwrap().path().is_dir() {
-                    None
-                } else {
-                    Some(dir.unwrap())
-                }
-            })
+            .map(|dir| dir.unwrap())
             .collect();
-        paths.sort_by_key(|dir| dir.path());
-        paths
+        files.sort_by_key(|dir| dir.path());
+        files
             .iter()
-            .filter_map(|f| {
-                let filename = f.file_name();
+            .filter_map(|file| {
+                let filename = file.file_name();
                 let filename = filename.to_str().unwrap();
-                if filename.ends_with(".lst") {
-                    Some(FolderEntry::File(String::from(
+                if file.path().is_dir() {
+                    Some(FolderEntry::Folder(filename.to_owned()))
+                } else if filename.ends_with(".txt") {
+                    Some(FolderEntry::Song(Song::get_name(
+                        &fs::read_to_string(file.path()).unwrap(),
+                    )))
+                } else if filename.ends_with(".lst") {
+                    Some(FolderEntry::Playlist(String::from(
                         filename.trim_end_matches(".lst"),
                     )))
                 } else {
@@ -188,54 +123,57 @@ impl<'a> App<'a> {
 
     fn update_path(&mut self) {
         let path = self.current_path();
-        self.songs.items = App::list_songs(&path);
-        self.songs.select(Some(0));
+        self.files.items = App::list_files(&path);
         self.input = String::new();
+        self.files.select(None);
     }
 
-    pub fn load(&mut self) {
-        let list = match self.state {
-            AppState::Songs => &mut self.songs,
-            AppState::Playlists => &mut self.playlists,
-            AppState::Playlist => &mut self.playlist,
-        };
-        if let Some(index) = list.selected() {
-            if let Some(key) = list.items.get(index) {
-                match self.state {
-                    AppState::Songs | AppState::Playlist => match key {
-                        FolderEntry::File(_) => match self.filemap.get(key) {
-                            Some(value) => {
-                                self.song = Some(Song::new(value.clone(), &self.config.theme))
+    pub fn load_selected(&mut self) {
+        if let Some(index) = self.files.selected() {
+            if let Some(file) = self.files.items.get(index) {
+                match file {
+                    FolderEntry::Song(name) => match self.filemap.get(file) {
+                        Some(value) => {
+                            self.song = Some(Song::new(value.clone(), &self.config.theme))
+                        }
+                        None => {
+                            if let Some(key) = RE_SONG_TRANSPOSITION.captures(name) {
+                                //[Ab]
+                                println!("{}", key.get(0).unwrap().as_str());
+                                let actual_name = RE_SONG_TRANSPOSITION.replace(name, "");
+                                //
+                                println!("{}", actual_name);
+                                if let Some(value) = self
+                                    .filemap
+                                    .get(&FolderEntry::Song(actual_name.to_string()))
+                                {
+                                    self.song = Some(Song::new(value.clone(), &self.config.theme))
+                                }
                             }
-                            None => {
-                                self.song = Some(Song::new(
-                                    String::from("{t:Song not found}"),
-                                    &self.config.theme,
-                                ))
-                            }
-                        },
-
-                        FolderEntry::Folder(path) => {
-                            self.path.push(path.to_string());
-                            let path = self.current_path();
-                            self.songs.items = App::list_songs(&path)
+                            //TODO: Better handling of missing songs?
+                            self.song = Some(Song::new(
+                                String::from("{t:Song not found}"),
+                                &self.config.theme,
+                            ))
                         }
                     },
-                    AppState::Playlists => {
-                        if let Some(playlist) = self.filemap.get(key) {
+                    FolderEntry::Playlist(_) => {
+                        if let Some(playlist) = self.filemap.get(file) {
                             let playlist = Playlist::new(playlist.clone());
-                            self.playlist = StatefulList::with_items(playlist.songs);
-                            self.state = AppState::Playlist;
+                            self.files.items = playlist.songs;
                         }
+                        self.files.select(None);
                     }
+                    FolderEntry::Folder(path) => self.path_forward(&path.to_string()),
                 }
             }
         }
     }
 
-    pub fn search(map: &HashMap<FolderEntry, String>, query: &str) -> Vec<FolderEntry> {
+    pub fn search(&self, query: &str) -> Vec<FolderEntry> {
         let mut results: Vec<FolderEntry>;
-        results = map
+        results = self
+            .filemap
             .iter()
             .filter_map(|(k, v)| {
                 if k.get().to_lowercase().contains(&query.to_lowercase())

@@ -1,8 +1,10 @@
+use termion::event::Key;
 use tui::style::{Color, Modifier, Style};
 
 pub struct Config {
     pub path: String,
     pub theme: Theme,
+    pub keybinds: Keybinds,
     pub auto_select_song: bool,
 }
 
@@ -11,6 +13,7 @@ impl Default for Config {
         Config {
             path: String::from("/home/pomegranate/Dropbox/Songbook/"),
             theme: Theme::default(),
+            keybinds: Keybinds::default(),
             auto_select_song: false,
         }
     }
@@ -32,6 +35,20 @@ impl Default for Theme {
             comment: Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
             chord: Style::default().fg(Color::Blue),
             selected: Style::default().fg(Color::Green),
+        }
+    }
+}
+
+pub struct Keybinds {
+    pub quit: Key,
+    pub search: Key,
+}
+
+impl Default for Keybinds {
+    fn default() -> Self {
+        Keybinds {
+            quit: Key::Ctrl('c'),
+            search: Key::Char('/'),
         }
     }
 }

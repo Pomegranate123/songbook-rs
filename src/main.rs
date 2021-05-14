@@ -1,5 +1,4 @@
 #![feature(iter_intersperse)]
-
 mod app;
 mod conf;
 mod parser;
@@ -7,7 +6,7 @@ mod ui;
 mod util;
 
 use crate::{
-    app::{App, AppState},
+    app::App,
     conf::Config,
     util::event::{self, Event, Events},
 };
@@ -40,89 +39,65 @@ fn main() -> Result<(), Box<dyn Error>> {
                 .constraints([Constraint::Length(20), Constraint::Min(80)].as_ref())
                 .split(f.size());
 
-            match app.state {
-                AppState::Songs => ui::draw_search_list(f, &mut app, layout[0]),
-                AppState::Playlists => ui::draw_playlists(f, &mut app, layout[0]),
-                AppState::Playlist => ui::draw_playlist(f, &mut app, layout[0]),
-            }
+            ui::draw_search_list(f, &mut app, layout[0]);
             ui::draw_song_block(f, &app, layout[1]);
         })?;
 
         match events.next()? {
             Event::Input(key) => match key {
+                _ if key == app.config.keybinds.search && !app.searching => app.searching = true,
+                _ if key == app.config.keybinds.quit => break,
                 Key::Char(c) => {
                     if app.searching {
                         app.input.push(c);
-                        let list = match app.state {
-                            AppState::Songs => &mut app.songs,
-                            AppState::Playlists => &mut app.playlists,
-                            AppState::Playlist => &mut app.playlist,
-                        };
-                        list.items = App::search(&app.filemap, &app.input);
-                        let len_results = list.items.len();
-                        if let Some(index) = list.selected() {
+                        app.files.items = app.search(&app.input);
+                        let len_results = app.files.items.len();
+                        if let Some(index) = app.files.selected() {
                             if index >= len_results {
-                                if list.items.is_empty() {
-                                    list.select(None);
+                                if app.files.items.is_empty() {
+                                    app.files.select(None);
                                 } else {
-                                    list.select(Some(len_results - 1));
+                                    app.files.select(Some(len_results - 1));
                                 }
                             }
                         }
-                    } else {
-                        match c {
-                            '/' => app.searching = true,
-                            'p' => app.state = AppState::Playlists,
-                            's' => app.state = AppState::Songs,
-                            _ => {}
-                        }
+                    } else if key == app.config.keybinds.search {
+                        app.searching = true;
                     }
                 }
-                Key::Down | Key::PageDown | Key::Up | Key::PageUp => {
-                    let list = match app.state {
-                        AppState::Songs => &mut app.songs,
-                        AppState::Playlists => &mut app.playlists,
-                        AppState::Playlist => &mut app.playlist,
-                    };
-                    match key {
-                        Key::Down => list.forward(1),
-                        Key::PageDown => list.forward(20),
-                        Key::Up => list.back(1),
-                        Key::PageUp => list.back(20),
-                        _ => (),
-                    }
+                Key::Down => {
+                    app.files.forward(1);
                     if app.config.auto_select_song {
-                        match app.state {
-                            AppState::Songs => app.load(),
-                            AppState::Playlists => (),
-                            AppState::Playlist => app.load(),
-                        }
+                        app.load_selected()
+                    }
+                }
+                Key::Up => {
+                    app.files.back(1);
+                    if app.config.auto_select_song {
+                        app.load_selected()
+                    }
+                }
+                Key::PageDown => {
+                    app.files.forward(20);
+                    if app.config.auto_select_song {
+                        app.load_selected()
+                    }
+                }
+                Key::PageUp => {
+                    app.files.back(20);
+                    if app.config.auto_select_song {
+                        app.load_selected()
                     }
                 }
                 Key::Backspace => {
                     if app.searching {
                         app.input.pop();
-                        match app.state {
-                            AppState::Songs => {
-                                app.songs.items = App::search(&app.filemap, &app.input)
-                            }
-                            AppState::Playlists => {
-                                app.playlists.items = App::search(&app.filemap, &app.input)
-                            }
-                            AppState::Playlist => {
-                                app.playlist.items = App::search(&app.filemap, &app.input)
-                            }
-                        }
+                        app.files.items = app.search(&app.input);
                     }
                 }
-                Key::Right => app.load(),
-                Key::Left => match app.state {
-                    AppState::Songs => app.path_back(),
-                    AppState::Playlists => (),
-                    AppState::Playlist => app.state = AppState::Playlists,
-                },
+                Key::Right => app.load_selected(),
+                Key::Left => app.path_back(),
                 Key::Esc => app.searching = false,
-                Key::Ctrl('c') => break,
                 _ => (),
             },
             Event::Tick => (),

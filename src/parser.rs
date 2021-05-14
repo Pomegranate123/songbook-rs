@@ -1,6 +1,9 @@
+extern crate rust_music_theory as rustmt;
+
 use crate::{conf::Theme, util::FolderEntry};
 use lazy_static::lazy_static;
-use regex::Regex;
+use regex::{Captures, Regex};
+use rustmt::{interval::Interval, note::PitchClass};
 use std::cmp::Ordering;
 use tui::text::{Span, Spans};
 
@@ -8,6 +11,7 @@ lazy_static! {
     static ref RE_NEWLINES: Regex = Regex::new(r"(\n\r?|\r\n?)").unwrap();
     static ref RE_TAGS: Regex = Regex::new(r"\{([^\{\}\n]+?)(?::([^\{\}\n]+))?\}\n?").unwrap();
     static ref RE_CHORDS: Regex = Regex::new(r"\[([^\n\[\]]*)\]").unwrap();
+    static ref RE_ROOT_NOTE: Regex = Regex::new(r"[ABCDEFG][b#]?").unwrap();
 }
 
 #[derive(Debug, Default, Clone)]
@@ -30,6 +34,7 @@ impl<'a> Song<'a> {
 
         let mut chorus = false;
         let mut comment = false;
+        let mut transposition = 0;
         'lines: for line in songstring.lines() {
             let mut chords: Vec<Span<'a>> = vec![];
             let mut spans = vec![];
@@ -55,6 +60,10 @@ impl<'a> Song<'a> {
                                 .push(Spans::from(Span::styled(key, theme.comment)));
                             continue 'lines;
                         }
+                        "Capo-Bass_Guitar" => {
+                            transposition =
+                                -cap.get(2).unwrap().as_str().trim().parse::<i32>().unwrap()
+                        }
                         "c" => spans.push(Span::styled(
                             String::from(cap.get(2).unwrap().as_str()),
                             theme.comment,
@@ -71,7 +80,13 @@ impl<'a> Song<'a> {
                     },
                     None => match comment {
                         true => spans.push(Span::styled(String::from(section), theme.comment)),
-                        false => Song::parse_chords(&section, &theme, &mut chords, &mut spans),
+                        false => Song::parse_chords(
+                            &section,
+                            &theme,
+                            &mut chords,
+                            &mut spans,
+                            transposition,
+                        ),
                     },
                 }
             }
@@ -97,6 +112,7 @@ impl<'a> Song<'a> {
         theme: &Theme,
         chords: &mut Vec<Span<'a>>,
         spans: &mut Vec<Span<'a>>,
+        transposition: i32,
     ) {
         let mut chords_string = String::new();
         let mut lyrics_string = String::new();
@@ -125,7 +141,17 @@ impl<'a> Song<'a> {
                     }
 
                     let chord_tag = chord.get(1).unwrap().as_str();
-                    chords_string.push_str(chord_tag);
+
+                    //TODO: Transposition
+                    let parsed_chord = RE_ROOT_NOTE.replace_all(chord_tag, |caps: &Captures| {
+                        PitchClass::from_interval(
+                            PitchClass::from_str(&caps.get(0).unwrap().as_str()).unwrap(),
+                            Interval::from_semitone(transposition as u8).unwrap(),
+                        )
+                        .to_string()
+                    });
+                    // Interval::from_semitone((transposition % 12) as u8).unwrap(),
+                    chords_string.push_str(&parsed_chord);
                     chords_string.push(' ');
                 }
                 None => lyrics_string.push_str(part),
@@ -191,12 +217,8 @@ impl Playlist {
         let mut lines = playliststring.lines();
         Playlist {
             title: lines.next().unwrap().to_string(),
-            songs: lines.map(|s| FolderEntry::File(s.to_string())).collect(),
+            songs: lines.map(|s| FolderEntry::Song(s.to_string())).collect(),
             playliststring,
         }
-    }
-
-    pub fn get_name(playliststring: &str) -> String {
-        playliststring.lines().next().unwrap().to_owned()
     }
 }
