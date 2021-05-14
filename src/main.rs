@@ -10,6 +10,7 @@ use crate::{
     conf::Config,
     util::event::{self, Event, Events},
 };
+use getopts::Options;
 use std::{error::Error, io, time::Duration};
 use termion::{event::Key, raw::IntoRawMode};
 use tui::{
@@ -18,7 +19,31 @@ use tui::{
     Terminal,
 };
 
+fn print_usage(program: &str, opts: Options) {
+    let brief = format!("Usage: {} FILE [options]", program);
+    print!("{}", opts.usage(&brief));
+}
+
 fn main() -> Result<(), Box<dyn Error>> {
+    // parse commandline arguments
+    let args: Vec<String> = std::env::args().collect();
+    let program = args[0].clone();
+
+    let mut opts = Options::new();
+    opts.optopt("c", "config", "set config file", "CONFIG");
+    opts.optflag("h", "help", "print this help menu");
+    let matches = match opts.parse(&args[1..]) {
+        Ok(m) => m,
+        Err(f) => {
+            panic!(f.to_string())
+        }
+    };
+
+    if matches.opt_present("h") {
+        print_usage(&program, opts);
+        return Ok(());
+    }
+
     let stdout = io::stdout().into_raw_mode()?;
     let backend = TermionBackend::new(stdout);
 
@@ -28,7 +53,16 @@ fn main() -> Result<(), Box<dyn Error>> {
         tick_rate: Duration::from_millis(250),
     });
 
-    let mut app = App::new(Config::default());
+    // If a config file is supplied load it otherwise use default settings
+    let mut app = if let Some(config) = matches.opt_str("c") {
+        let path = std::path::PathBuf::from(&config);
+        if !path.exists() {
+            panic!("path {} doesn't exist", config)
+        }
+        App::new(Config::load(&path)?)
+    } else {
+        App::new(Config::default())
+    };
 
     term.clear().unwrap();
     loop {
