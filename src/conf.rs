@@ -9,7 +9,7 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Config {
-            path: String::from("/home/pomegranate/Dropbox/Songbook/"),
+            path: String::from("/home/zeus/repos/gpro-rs/"),
             theme: Theme::default(),
             auto_select_song: false,
         }
