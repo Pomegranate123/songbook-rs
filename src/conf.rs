@@ -26,9 +26,9 @@ impl Default for Config {
 }
 
 impl Config {
-    fn load(file: Path) -> Result<Config, std::io::Error> {
+    fn load(file: &std::path::Path) -> Result<Config, Box<dyn std::error::Error>> {
         let contents = std::fs::read_to_string(file)?;
-        Ok(toml::from_str(&contents))
+        Ok(toml::from_str(&contents)?)
     }
 }
 
@@ -69,7 +69,7 @@ impl Default for Keybinds {
 }
 
 /// Termion key wrapper that has serialize and deserialize
-struct TerKey(Key);
+pub struct TerKey(Key);
 
 impl std::ops::Deref for TerKey {
     type Target = Key;
@@ -169,6 +169,7 @@ impl<'de> Visitor<'de> for KeyVisitor {
                 let c = s.chars().skip(1).next().unwrap();
                 Key::Ctrl(c)
             }
+            _ => return Err(E::invalid_value(serde::de::Unexpected::Str(s), &self)),
         };
 
         Ok(TerKey(key))

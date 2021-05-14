@@ -45,8 +45,8 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         match events.next()? {
             Event::Input(key) => match key {
-                _ if key == app.config.keybinds.search && !app.searching => app.searching = true,
-                _ if key == app.config.keybinds.quit => break,
+                _ if key == *app.config.keybinds.search && !app.searching => app.searching = true,
+                _ if key == *app.config.keybinds.quit => break,
                 Key::Char(c) => {
                     if app.searching {
                         app.input.push(c);
@@ -61,7 +61,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                                 }
                             }
                         }
-                    } else if key == app.config.keybinds.search {
+                    } else if key == *app.config.keybinds.search {
                         app.searching = true;
                     }
                 }
