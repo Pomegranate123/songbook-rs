@@ -7,21 +7,23 @@ use tui::widgets::ListState;
 #[derive(PartialEq, Eq, Hash, Clone)]
 pub enum FolderEntry {
     Folder(String),
-    File(String),
+    Song(String),
+    Playlist(String),
 }
 
 impl FolderEntry {
     pub fn get(&self) -> String {
         match self {
             FolderEntry::Folder(path) => path.to_owned(),
-            FolderEntry::File(name) => name.to_owned(),
+            FolderEntry::Song(name) => name.to_owned(),
+            FolderEntry::Playlist(name) => name.to_owned(),
         }
     }
 }
 
 impl Default for FolderEntry {
     fn default() -> Self {
-        FolderEntry::File(String::default())
+        FolderEntry::Song(String::default())
     }
 }
 
