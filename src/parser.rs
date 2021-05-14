@@ -195,4 +195,8 @@ impl Playlist {
             playliststring,
         }
     }
+
+    pub fn get_name(playliststring: &str) -> String {
+        playliststring.lines().next().unwrap().to_owned()
+    }
 }

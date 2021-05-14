@@ -2,7 +2,6 @@
 
 pub mod event;
 
-use std::collections::HashMap;
 use tui::widgets::ListState;
 
 #[derive(PartialEq, Eq, Hash, Clone)]
@@ -30,7 +29,6 @@ impl Default for FolderEntry {
 pub struct StatefulList {
     pub state: ListState,
     pub items: Vec<FolderEntry>,
-    pub item_map: HashMap<FolderEntry, String>,
 }
 
 impl StatefulList {
@@ -38,47 +36,20 @@ impl StatefulList {
         StatefulList {
             state: ListState::default(),
             items: Vec::new(),
-            item_map: HashMap::new(),
         }
     }
 
-    pub fn with_items(
-        items: Vec<FolderEntry>,
-        item_map: HashMap<FolderEntry, String>,
-    ) -> StatefulList {
+    pub fn with_items(items: Vec<FolderEntry>) -> StatefulList {
         StatefulList {
             state: ListState::default(),
             items,
-            item_map,
         }
     }
 
-    pub fn with_items_sorted(
-        mut items: Vec<FolderEntry>,
-        item_map: HashMap<FolderEntry, String>,
-    ) -> Self {
+    pub fn with_items_sorted(mut items: Vec<FolderEntry>) -> Self {
         //let mut items: Vec<_> = item_map.iter().map(|s| String::from(s.0)).collect();
         items.sort_by_key(|f| f.get());
-        Self::with_items(items, item_map)
-    }
-
-    pub fn search(&mut self, query: &str) {
-        let mut results: Vec<FolderEntry>;
-        results = self
-            .item_map
-            .iter()
-            .filter_map(|(k, v)| {
-                if k.get().to_lowercase().contains(&query.to_lowercase())
-                    | v.to_lowercase().contains(&query.to_lowercase())
-                {
-                    Some(k.clone())
-                } else {
-                    None
-                }
-            })
-            .collect();
-        results.sort_by_key(|f| f.get());
-        self.items = results;
+        Self::with_items(items)
     }
 
     pub fn forward(&mut self, amount: usize) {

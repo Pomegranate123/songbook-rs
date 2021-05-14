@@ -23,6 +23,7 @@ pub struct App<'a> {
     pub songs: StatefulList,
     pub playlists: StatefulList,
     pub playlist: StatefulList,
+    pub filemap: HashMap<FolderEntry, String>,
     pub config: Config,
     pub state: AppState,
     pub song: Option<Song<'a>>,
@@ -33,14 +34,10 @@ pub struct App<'a> {
 
 impl<'a> App<'a> {
     pub fn new(config: Config) -> Self {
-        let playlist_map = App::map_playlists(&config.path);
-        let playlists: Vec<_> = playlist_map.iter().map(|s| s.0.clone()).collect();
         App {
-            songs: StatefulList::with_items_sorted(
-                App::list_songs(&config.path),
-                App::map_songs(&config.path),
-            ),
-            playlists: StatefulList::with_items_sorted(playlists, playlist_map),
+            songs: StatefulList::with_items_sorted(App::list_songs(&config.path)),
+            playlists: StatefulList::with_items_sorted(App::list_playlists(&config.path)),
+            filemap: App::map_files(&config.path),
             config,
             ..Default::default()
         }
@@ -100,7 +97,7 @@ impl<'a> App<'a> {
     //            .collect()
     //    }
     //
-    fn map_songs(path: &str) -> HashMap<FolderEntry, String> {
+    fn map_files(path: &str) -> HashMap<FolderEntry, String> {
         let mut files: Vec<_> = fs::read_dir(path)
             .unwrap()
             .flat_map(|dir| {
@@ -128,6 +125,12 @@ impl<'a> App<'a> {
                 } else if filename.ends_with(".txt") {
                     let filestring = fs::read_to_string(file.path()).unwrap();
                     Some((FolderEntry::File(Song::get_name(&filestring)), filestring))
+                } else if filename.ends_with(".lst") {
+                    let filestring = fs::read_to_string(file.path()).unwrap();
+                    Some((
+                        FolderEntry::File(filename.trim_end_matches(".lst").to_owned()),
+                        filestring,
+                    ))
                 } else {
                     None
                 }
@@ -135,7 +138,7 @@ impl<'a> App<'a> {
             .collect()
     }
 
-    fn map_playlists(path: &str) -> HashMap<FolderEntry, String> {
+    fn list_playlists(path: &str) -> Vec<FolderEntry> {
         let mut paths: Vec<_> = fs::read_dir(path)
             .unwrap()
             .filter_map(|dir| {
@@ -152,12 +155,10 @@ impl<'a> App<'a> {
             .filter_map(|f| {
                 let filename = f.file_name();
                 let filename = filename.to_str().unwrap();
-                let filestring = fs::read_to_string(f.path()).unwrap();
                 if filename.ends_with(".lst") {
-                    Some((
-                        FolderEntry::File(String::from(filename.trim_end_matches(".lst"))),
-                        filestring,
-                    ))
+                    Some(FolderEntry::File(String::from(
+                        filename.trim_end_matches(".lst"),
+                    )))
                 } else {
                     None
                 }
@@ -177,16 +178,19 @@ impl<'a> App<'a> {
 
     pub fn path_forward(&mut self, folder: &str) {
         self.path.push(folder.to_string());
-        let path = self.current_path();
-        self.songs.items = App::list_songs(&path);
-        self.input = String::new()
+        self.update_path();
     }
 
     pub fn path_back(&mut self) {
         self.path.pop();
+        self.update_path();
+    }
+
+    fn update_path(&mut self) {
         let path = self.current_path();
         self.songs.items = App::list_songs(&path);
-        self.input = String::new()
+        self.songs.select(Some(0));
+        self.input = String::new();
     }
 
     pub fn load(&mut self) {
@@ -199,7 +203,7 @@ impl<'a> App<'a> {
             if let Some(key) = list.items.get(index) {
                 match self.state {
                     AppState::Songs | AppState::Playlist => match key {
-                        FolderEntry::File(_) => match list.item_map.get(key) {
+                        FolderEntry::File(_) => match self.filemap.get(key) {
                             Some(value) => {
                                 self.song = Some(Song::new(value.clone(), &self.config.theme))
                             }
@@ -218,17 +222,32 @@ impl<'a> App<'a> {
                         }
                     },
                     AppState::Playlists => {
-                        if let Some(playlist) = list.item_map.get(key) {
+                        if let Some(playlist) = self.filemap.get(key) {
                             let playlist = Playlist::new(playlist.clone());
-                            self.playlist = StatefulList::with_items(
-                                playlist.songs,
-                                self.songs.item_map.clone(),
-                            );
+                            self.playlist = StatefulList::with_items(playlist.songs);
                             self.state = AppState::Playlist;
                         }
                     }
                 }
             }
         }
+    }
+
+    pub fn search(map: &HashMap<FolderEntry, String>, query: &str) -> Vec<FolderEntry> {
+        let mut results: Vec<FolderEntry>;
+        results = map
+            .iter()
+            .filter_map(|(k, v)| {
+                if k.get().to_lowercase().contains(&query.to_lowercase())
+                    | v.to_lowercase().contains(&query.to_lowercase())
+                {
+                    Some(k.clone())
+                } else {
+                    None
+                }
+            })
+            .collect();
+        results.sort_by_key(|f| f.get());
+        results
     }
 }

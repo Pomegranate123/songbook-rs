@@ -58,7 +58,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                             AppState::Playlists => &mut app.playlists,
                             AppState::Playlist => &mut app.playlist,
                         };
-                        list.search(&app.input);
+                        list.items = App::search(&app.filemap, &app.input);
                         let len_results = list.items.len();
                         if let Some(index) = list.selected() {
                             if index >= len_results {
@@ -103,9 +103,15 @@ fn main() -> Result<(), Box<dyn Error>> {
                     if app.searching {
                         app.input.pop();
                         match app.state {
-                            AppState::Songs => app.songs.search(&app.input),
-                            AppState::Playlists => app.playlists.search(&app.input),
-                            AppState::Playlist => app.playlist.search(&app.input),
+                            AppState::Songs => {
+                                app.songs.items = App::search(&app.filemap, &app.input)
+                            }
+                            AppState::Playlists => {
+                                app.playlists.items = App::search(&app.filemap, &app.input)
+                            }
+                            AppState::Playlist => {
+                                app.playlist.items = App::search(&app.filemap, &app.input)
+                            }
                         }
                     }
                 }
