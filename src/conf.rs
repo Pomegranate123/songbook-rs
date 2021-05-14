@@ -17,7 +17,7 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Config {
-            path: String::from("/home/zeus/repos/gpro-rs/"),
+            path: String::from("."),
             theme: Theme::default(),
             keybinds: Keybinds::default(),
             auto_select_song: false,
@@ -26,7 +26,7 @@ impl Default for Config {
 }
 
 impl Config {
-    fn load(file: &std::path::Path) -> Result<Config, Box<dyn std::error::Error>> {
+    pub fn load(file: &std::path::Path) -> Result<Config, Box<dyn std::error::Error>> {
         let contents = std::fs::read_to_string(file)?;
         Ok(toml::from_str(&contents)?)
     }
