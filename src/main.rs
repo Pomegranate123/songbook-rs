@@ -32,6 +32,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut opts = Options::new();
     opts.optopt("c", "config", "set config file", "CONFIG");
     opts.optflag("h", "help", "print this help menu");
+    opts.optflag("", "default-config", "write the default config");
+
     let matches = match opts.parse(&args[1..]) {
         Ok(m) => m,
         Err(f) => {
@@ -41,6 +43,12 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     if matches.opt_present("h") {
         print_usage(&program, opts);
+        return Ok(());
+    }
+
+    if matches.opt_present("default-config") && matches.opt_present("c") {
+        let path = std::path::PathBuf::from(matches.opt_str("default-config").unwrap());
+        Config::write_default(&path)?;
         return Ok(());
     }
 
