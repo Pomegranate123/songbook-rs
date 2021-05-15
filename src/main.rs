@@ -35,7 +35,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let matches = match opts.parse(&args[1..]) {
         Ok(m) => m,
         Err(f) => {
-            panic!(f.to_string())
+            panic!("{}", f.to_string())
         }
     };
 
@@ -56,7 +56,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     // If a config file is supplied load it otherwise use default settings
     let mut app = if let Some(config) = matches.opt_str("c") {
         let path = std::path::PathBuf::from(&config);
-        if !path.exists() {
+        if path.exists() {
             panic!("path {} doesn't exist", config)
         }
         App::new(Config::load(&path)?)
