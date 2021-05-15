@@ -47,8 +47,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
 
     if matches.opt_present("default-config") && matches.opt_present("c") {
-        let path = std::path::PathBuf::from(matches.opt_str("default-config").unwrap());
+        let path = std::path::PathBuf::from(matches.opt_str("c").unwrap());
         Config::write_default(&path)?;
+        println!("Default config has been written to {}", path.display());
         return Ok(());
     }
 
