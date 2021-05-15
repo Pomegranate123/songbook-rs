@@ -1,3 +1,4 @@
+extern crate rust_music_theory as rustmt;
 use crate::{
     conf::Config,
     parser::{Playlist, Song},
@@ -5,6 +6,7 @@ use crate::{
 };
 use lazy_static::lazy_static;
 use regex::Regex;
+use rustmt::note::PitchClass;
 use std::{collections::HashMap, fs};
 
 lazy_static! {
@@ -24,8 +26,10 @@ pub struct App<'a> {
 
 impl<'a> App<'a> {
     pub fn new(config: Config) -> Self {
+        let mut files = App::list_files(&config.path);
+        files.sort_by_key(|f| f.get());
         App {
-            files: StatefulList::with_items_sorted(App::list_files(&config.path)),
+            files: StatefulList::with_items(files),
             filemap: App::map_files(&config.path),
             config,
             ..Default::default()
@@ -129,43 +133,45 @@ impl<'a> App<'a> {
     }
 
     pub fn load_selected(&mut self) {
-        if let Some(index) = self.files.selected() {
-            if let Some(file) = self.files.items.get(index) {
-                match file {
-                    FolderEntry::Song(name) => match self.filemap.get(file) {
+        if let Some(file) = self.files.get_selected_item() {
+            match file {
+                FolderEntry::Song(songname) => {
+                    match self.filemap.get(&file) {
                         Some(value) => {
-                            self.song = Some(Song::new(value.clone(), &self.config.theme))
+                            self.song = Some(Song::from(value.clone(), &self.config.theme))
                         }
                         None => {
-                            if let Some(key) = RE_SONG_TRANSPOSITION.captures(name) {
-                                //[Ab]
-                                println!("{}", key.get(0).unwrap().as_str());
-                                let actual_name = RE_SONG_TRANSPOSITION.replace(name, "");
-                                //
-                                println!("{}", actual_name);
+                            if let Some(key) = RE_SONG_TRANSPOSITION.captures(songname) {
+                                let actual_name = RE_SONG_TRANSPOSITION.replace(songname, "");
                                 if let Some(value) = self
                                     .filemap
                                     .get(&FolderEntry::Song(actual_name.to_string()))
                                 {
-                                    self.song = Some(Song::new(value.clone(), &self.config.theme))
+                                    self.song = Some(Song::in_key(
+                                        value.clone(),
+                                        &self.config.theme,
+                                        PitchClass::from_str(key.get(1).unwrap().as_str()).unwrap(),
+                                    ));
+                                    return;
                                 }
                             }
                             //TODO: Better handling of missing songs?
-                            self.song = Some(Song::new(
+                            self.song = Some(Song::from(
                                 String::from("{t:Song not found}"),
                                 &self.config.theme,
                             ))
                         }
-                    },
-                    FolderEntry::Playlist(_) => {
-                        if let Some(playlist) = self.filemap.get(file) {
-                            let playlist = Playlist::new(playlist.clone());
-                            self.files.items = playlist.songs;
-                        }
-                        self.files.select(None);
                     }
-                    FolderEntry::Folder(path) => self.path_forward(&path.to_string()),
                 }
+
+                FolderEntry::Playlist(_) => {
+                    if let Some(playlist) = self.filemap.get(file) {
+                        let playlist = Playlist::new(playlist.clone());
+                        self.files.items = playlist.songs;
+                    }
+                    self.files.select(None);
+                }
+                FolderEntry::Folder(path) => self.path_forward(&path.to_string()),
             }
         }
     }

@@ -18,13 +18,20 @@ lazy_static! {
 pub struct Song<'a> {
     pub title: String,
     pub subtitle: String,
-    pub key: String,
     pub songstring: String,
     pub text: Vec<Spans<'a>>,
 }
 
 impl<'a> Song<'a> {
-    pub fn new(songstring: String, theme: &Theme) -> Self {
+    pub fn from(songstring: String, theme: &Theme) -> Self {
+        Song::new(songstring, theme, None)
+    }
+
+    pub fn in_key(songstring: String, theme: &Theme, key: PitchClass) -> Self {
+        Song::new(songstring, theme, Some(key))
+    }
+
+    fn new(songstring: String, theme: &Theme, transpose_to: Option<PitchClass>) -> Self {
         let songstring = RE_NEWLINES.replace_all(&songstring, "\n");
 
         let mut song = Song {
@@ -53,16 +60,19 @@ impl<'a> Song<'a> {
                             continue 'lines;
                         }
                         "key" => {
-                            let key =
-                                String::from("Toonsoort ") + cap.get(2).unwrap().as_str().trim();
-                            song.key = key.clone();
-                            song.text
-                                .push(Spans::from(Span::styled(key, theme.comment)));
+                            if let Some(key) = transpose_to {
+                                if let Some(song_key) =
+                                    PitchClass::from_str(cap.get(2).unwrap().as_str().trim())
+                                {
+                                    transposition +=
+                                        key.into_u8() as i32 - song_key.into_u8() as i32;
+                                }
+                            }
                             continue 'lines;
                         }
                         "Capo-Bass_Guitar" => {
-                            transposition =
-                                -cap.get(2).unwrap().as_str().trim().parse::<i32>().unwrap()
+                            transposition -=
+                                cap.get(2).unwrap().as_str().trim().parse::<i32>().unwrap()
                         }
                         "c" => spans.push(Span::styled(
                             String::from(cap.get(2).unwrap().as_str()),
@@ -146,7 +156,7 @@ impl<'a> Song<'a> {
                     let parsed_chord = RE_ROOT_NOTE.replace_all(chord_tag, |caps: &Captures| {
                         PitchClass::from_interval(
                             PitchClass::from_str(&caps.get(0).unwrap().as_str()).unwrap(),
-                            Interval::from_semitone(transposition as u8).unwrap(),
+                            Interval::from_semitone(((transposition + 12) % 12) as u8).unwrap(),
                         )
                         .to_string()
                     });
