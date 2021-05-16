@@ -30,14 +30,14 @@ fn main() -> Result<(), Box<dyn Error>> {
     let program = &args[0];
 
     let mut opts = Options::new();
-    opts.optopt("c", "config", "set config file", "CONFIG");
+    opts.optopt("c", "config", "set config file", "PATH");
+    opts.optopt("", "default-config", "write the default config", "PATH");
     opts.optflag("h", "help", "print this help menu");
-    opts.optflag("", "default-config", "write the default config");
 
     let matches = match opts.parse(&args[1..]) {
         Ok(m) => m,
         Err(f) => {
-            panic!("{}", f.to_string())
+            panic!("{}", f)
         }
     };
 
@@ -46,33 +46,37 @@ fn main() -> Result<(), Box<dyn Error>> {
         return Ok(());
     }
 
-    if matches.opt_present("default-config") && matches.opt_present("c") {
-        let path = std::path::PathBuf::from(matches.opt_str("c").unwrap());
+    if let Some(arg) = matches.opt_str("default-config") {
+        let path = std::path::PathBuf::from(&arg);
+        if !path.exists() {
+            panic!("Path '{}' doesn't exist", arg)
+        }
         Config::write_default(&path)?;
         println!("Default config has been written to {}", path.display());
         return Ok(());
     }
+
+    let config = match matches.opt_str("c") {
+        Some(arg) => {
+            let path = std::path::PathBuf::from(&arg);
+            if !path.exists() {
+                panic!("Path '{}' doesn't exist", arg)
+            }
+            Config::load(&path)?
+        }
+        None => Config::default(),
+    };
 
     let stdout = io::stdout().into_raw_mode()?;
     let backend = TermionBackend::new(stdout);
 
     let mut term = Terminal::new(backend)?;
     let events = Events::with_config(event::Config {
-        exit_key: Key::Ctrl('c'),
+        exit_key: *config.keybinds.quit,
         tick_rate: Duration::from_millis(250),
     });
 
-    // If a config file is supplied load it otherwise use default settings
-    let mut app = match matches.opt_str("c") {
-        Some(config) => {
-            let path = std::path::PathBuf::from(&config);
-            if !path.exists() {
-                panic!("Path '{}' doesn't exist", config)
-            }
-            App::new(Config::load(&path)?)
-        }
-        None => App::new(Config::default()),
-    };
+    let mut app = App::new(config);
 
     term.clear().unwrap();
     loop {
