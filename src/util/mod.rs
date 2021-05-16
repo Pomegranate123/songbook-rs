@@ -48,12 +48,6 @@ impl StatefulList {
         }
     }
 
-    pub fn with_items_sorted(mut items: Vec<FolderEntry>) -> Self {
-        //let mut items: Vec<_> = item_map.iter().map(|s| String::from(s.0)).collect();
-        items.sort_by_key(|f| f.get());
-        Self::with_items(items)
-    }
-
     pub fn forward(&mut self, amount: usize) {
         let i = match self.state.selected() {
             Some(i) => {
@@ -104,5 +98,12 @@ impl StatefulList {
 
     pub fn selected(&self) -> Option<usize> {
         self.state.selected()
+    }
+
+    pub fn get_selected_item(&self) -> Option<&FolderEntry> {
+        match self.state.selected() {
+            Some(index) => Some(&self.items[index]),
+            None => None,
+        }
     }
 }
