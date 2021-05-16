@@ -52,7 +52,10 @@ where
     match app.song.as_ref() {
         Some(song) => {
             let song_block = Block::default()
-                .title(Span::styled(song.title.as_str(), app.config.theme.title))
+                .title(Span::styled(
+                    song.title.as_str(),
+                    app.config.theme.title.to_style(),
+                ))
                 .borders(Borders::ALL);
 
             let song_rect = song_block.inner(layout_chunk);
