@@ -27,7 +27,7 @@ fn print_usage(program: &str, opts: Options) {
 fn main() -> Result<(), Box<dyn Error>> {
     // parse commandline arguments
     let args: Vec<String> = std::env::args().collect();
-    let program = args[0].clone();
+    let program = &args[0];
 
     let mut opts = Options::new();
     opts.optopt("c", "config", "set config file", "CONFIG");
@@ -35,12 +35,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     let matches = match opts.parse(&args[1..]) {
         Ok(m) => m,
         Err(f) => {
-            panic!(f.to_string())
+            panic!("{}", f.to_string())
         }
     };
 
     if matches.opt_present("h") {
-        print_usage(&program, opts);
+        print_usage(program, opts);
         return Ok(());
     }
 
@@ -53,15 +53,15 @@ fn main() -> Result<(), Box<dyn Error>> {
         tick_rate: Duration::from_millis(250),
     });
 
-    // If a config file is supplied load it otherwise use default settings
-    let mut app = if let Some(config) = matches.opt_str("c") {
-        let path = std::path::PathBuf::from(&config);
-        if !path.exists() {
-            panic!("path {} doesn't exist", config)
+    let mut app = match matches.opt_str("c") {
+        Some(config) => {
+            let path = std::path::PathBuf::from(&config);
+            if !path.exists() {
+                panic!("Path '{}' doesn't exist", config)
+            }
+            App::new(Config::load(&path)?)
         }
-        App::new(Config::load(&path)?)
-    } else {
-        App::new(Config::default())
+        None => App::new(Config::default()),
     };
 
     term.clear().unwrap();
