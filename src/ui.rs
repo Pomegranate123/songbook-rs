@@ -31,7 +31,7 @@ where
         Block::default()
             .borders(Borders::ALL)
             .border_style(if app.searching {
-                app.config.theme.selected
+                app.config.theme.selected.to_style()
             } else {
                 Style::default()
             })
@@ -47,7 +47,7 @@ where
 {
     let mut song = app.song.clone().unwrap_or_default();
     let song_block = Block::default()
-        .title(Span::styled(song.title, app.config.theme.title))
+        .title(Span::styled(song.title, app.config.theme.title.to_style()))
         .borders(Borders::ALL);
 
     let song_rect = song_block.inner(layout_chunk);

@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use serde::{
     de::{Deserializer, Visitor},
     ser::Serializer,
@@ -48,44 +50,95 @@ impl Config {
 
 #[derive(Serialize, Deserialize)]
 pub struct Theme {
-    pub title: Style,
-    pub comment: Style,
-    pub chord: Style,
-    pub selected: Style,
+    pub title: ConfStyle,
+    pub comment: ConfStyle,
+    pub chord: ConfStyle,
+    pub selected: ConfStyle,
 }
 
 impl Default for Theme {
     fn default() -> Self {
         Theme {
-            title: Style::default()
+            title: ConfStyle::default()
                 .fg(Color::Blue)
                 .add_modifier(Modifier::BOLD),
-            comment: Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
-            chord: Style::default().fg(Color::Blue),
-            selected: Style::default().fg(Color::Green),
+            comment: ConfStyle::default()
+                .fg(Color::Red)
+                .add_modifier(Modifier::BOLD),
+            chord: ConfStyle::default().fg(Color::Blue),
+            selected: ConfStyle::default()
+                .fg(Color::Green)
+                .add_modifier(Modifier::BOLD),
         }
     }
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct Keybinds {
-    pub quit: TerKey,
-    pub search: TerKey,
+    pub quit: SerDeKey,
+    pub search: SerDeKey,
 }
 
 impl Default for Keybinds {
     fn default() -> Self {
         Keybinds {
-            quit: TerKey(Key::Ctrl('c')),
-            search: TerKey(Key::Char('/')),
+            quit: SerDeKey(Key::Ctrl('c')),
+            search: SerDeKey(Key::Char('/')),
+        }
+    }
+}
+
+/// Style wrapper which uses SerDeModifier in order to be readable when serialized
+#[derive(Serialize, Deserialize)]
+pub struct ConfStyle {
+    pub fg: Option<Color>,
+    pub bg: Option<Color>,
+    pub modifiers: Vec<SerDeModifier>,
+}
+
+impl ConfStyle {
+    pub fn fg(mut self, fg: Color) -> Self {
+        self.fg = Some(fg);
+        self
+    }
+
+    pub fn bg(mut self, bg: Color) -> Self {
+        self.bg = Some(bg);
+        self
+    }
+
+    pub fn add_modifier(mut self, modifier: Modifier) -> Self {
+        self.modifiers.push(SerDeModifier(modifier));
+        self
+    }
+
+    pub fn to_style(&self) -> Style {
+        self.modifiers.iter().fold(
+            Style {
+                fg: self.fg,
+                bg: self.bg,
+                add_modifier: Modifier::empty(),
+                sub_modifier: Modifier::empty(),
+            },
+            |style, m| style.add_modifier(**m),
+        )
+    }
+}
+
+impl Default for ConfStyle {
+    fn default() -> Self {
+        ConfStyle {
+            fg: None,
+            bg: None,
+            modifiers: vec![],
         }
     }
 }
 
 /// Termion key wrapper that has serialize and deserialize
-pub struct TerKey(Key);
+pub struct SerDeKey(Key);
 
-impl std::ops::Deref for TerKey {
+impl std::ops::Deref for SerDeKey {
     type Target = Key;
 
     fn deref(&self) -> &Self::Target {
@@ -93,7 +146,7 @@ impl std::ops::Deref for TerKey {
     }
 }
 
-impl Serialize for TerKey {
+impl Serialize for SerDeKey {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -123,8 +176,8 @@ impl Serialize for TerKey {
     }
 }
 
-impl<'de> Deserialize<'de> for TerKey {
-    fn deserialize<D>(deserializer: D) -> Result<TerKey, D::Error>
+impl<'de> Deserialize<'de> for SerDeKey {
+    fn deserialize<D>(deserializer: D) -> Result<SerDeKey, D::Error>
     where
         D: Deserializer<'de>,
     {
@@ -135,7 +188,7 @@ impl<'de> Deserialize<'de> for TerKey {
 struct KeyVisitor;
 
 impl<'de> Visitor<'de> for KeyVisitor {
-    type Value = TerKey;
+    type Value = SerDeKey;
 
     fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(formatter, "a string containing a valid keycode")
@@ -158,34 +211,98 @@ impl<'de> Visitor<'de> for KeyVisitor {
             "BackTab" => Key::BackTab,
             "Delete" => Key::Delete,
             "Insert" => Key::Insert,
-            s if s.starts_with("F") && s.len() == 2 => {
-                // FIXME unwraps
-                let n = s
-                    .chars()
-                    .skip(1)
-                    .next()
-                    .unwrap()
-                    .to_string()
-                    .parse::<u8>()
-                    .unwrap();
+            s if s.starts_with('F') && s.len() >= 2 => {
+                let n: u8 = match s[1..].parse() {
+                    Ok(num) => num,
+                    Err(_) => return Err(E::invalid_value(serde::de::Unexpected::Str(s), &self)),
+                };
                 Key::F(n)
             }
             "Null" => Key::Null,
             "Esc" => Key::Esc,
             s if s.len() == 1 => Key::Char(s.chars().next().unwrap()),
             s if s.starts_with("Alt+") && s.len() == 5 => {
-                // FIXME unwraps
-                let c = s.chars().skip(1).next().unwrap();
+                let c = s.chars().nth(4).unwrap();
                 Key::Alt(c)
             }
             s if s.starts_with("Ctrl+") && s.len() == 6 => {
-                // FIXME unwraps
-                let c = s.chars().skip(1).next().unwrap();
+                let c = s.chars().nth(5).unwrap();
                 Key::Ctrl(c)
             }
             _ => return Err(E::invalid_value(serde::de::Unexpected::Str(s), &self)),
         };
 
-        Ok(TerKey(key))
+        Ok(SerDeKey(key))
+    }
+}
+
+/// Tui Modifier wrapper that has readable serialize and deserialize
+pub struct SerDeModifier(Modifier);
+
+impl std::ops::Deref for SerDeModifier {
+    type Target = Modifier;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl Serialize for SerDeModifier {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let string = match self.0 {
+            Modifier::BOLD => "Bold",
+            Modifier::DIM => "Dim",
+            Modifier::ITALIC => "Italic",
+            Modifier::UNDERLINED => "Underlined",
+            Modifier::SLOW_BLINK => "Slow blink",
+            Modifier::RAPID_BLINK => "Rapid blink",
+            Modifier::REVERSED => "Reversed",
+            Modifier::HIDDEN => "Hidden",
+            Modifier::CROSSED_OUT => "Strikethrough",
+            _ => unreachable!(),
+        };
+        serializer.serialize_str(&string)
+    }
+}
+
+impl<'de> Deserialize<'de> for SerDeModifier {
+    fn deserialize<D>(deserializer: D) -> Result<SerDeModifier, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        deserializer.deserialize_str(ModifierVisitor)
+    }
+}
+
+struct ModifierVisitor;
+
+impl<'de> Visitor<'de> for ModifierVisitor {
+    type Value = SerDeModifier;
+
+    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(formatter, "a string containing a valid modifier")
+    }
+
+    fn visit_str<E>(self, s: &str) -> Result<Self::Value, E>
+    where
+        E: serde::de::Error,
+    {
+        let modifier = match s {
+            "Bold" => Modifier::BOLD,
+            "Dim" => Modifier::DIM,
+            "Italic" => Modifier::ITALIC,
+            "Underlined" => Modifier::UNDERLINED,
+            "Slow blink" => Modifier::SLOW_BLINK,
+            "Rapid blink" => Modifier::RAPID_BLINK,
+            "Reversed" => Modifier::REVERSED,
+            "Hidden" => Modifier::HIDDEN,
+            "Strikethrough" => Modifier::CROSSED_OUT,
+            _ => return Err(E::invalid_value(serde::de::Unexpected::Str(s), &self)),
+        };
+
+        Ok(SerDeModifier(modifier))
     }
 }
