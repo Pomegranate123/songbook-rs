@@ -1,0 +1,25 @@
+path: "."
+theme:
+  title:
+    fg: Blue
+    bg: ~
+    modifiers:
+      - Bold
+  comment:
+    fg: Red
+    bg: ~
+    modifiers:
+      - Bold
+  chord:
+    fg: Blue
+    bg: ~
+    modifiers: []
+  selected:
+    fg: Green
+    bg: ~
+    modifiers:
+      - Bold
+keybinds:
+  quit: Ctrl+c
+  search: /
+auto_select_song: false

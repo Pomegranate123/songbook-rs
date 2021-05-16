@@ -56,7 +56,7 @@ impl<'a> Song<'a> {
                             let subtitle = String::from(cap.get(2).unwrap().as_str().trim());
                             song.subtitle = subtitle.clone();
                             song.text
-                                .push(Spans::from(Span::styled(subtitle, theme.title)));
+                                .push(Spans::from(Span::styled(subtitle, theme.title.to_style())));
                             continue 'lines;
                         }
                         "key" => {
@@ -76,7 +76,7 @@ impl<'a> Song<'a> {
                         }
                         "c" => spans.push(Span::styled(
                             String::from(cap.get(2).unwrap().as_str()),
-                            theme.comment,
+                            theme.comment.to_style(),
                         )),
                         "soc" | "start_of_chorus" => {
                             chorus = true;
@@ -89,7 +89,10 @@ impl<'a> Song<'a> {
                         _ => {}
                     },
                     None => match comment {
-                        true => spans.push(Span::styled(String::from(section), theme.comment)),
+                        true => spans.push(Span::styled(
+                            String::from(section),
+                            theme.comment.to_style(),
+                        )),
                         false => Song::parse_chords(
                             &section,
                             &theme,
@@ -102,10 +105,16 @@ impl<'a> Song<'a> {
             }
             if chorus {
                 if !spans.is_empty() {
-                    spans.insert(0, Span::styled(String::from("| "), theme.comment));
+                    spans.insert(
+                        0,
+                        Span::styled(String::from("| "), theme.comment.to_style()),
+                    );
                 }
                 if !chords.is_empty() {
-                    chords.insert(0, Span::styled(String::from("| "), theme.comment));
+                    chords.insert(
+                        0,
+                        Span::styled(String::from("| "), theme.comment.to_style()),
+                    );
                 }
             }
 
@@ -168,7 +177,7 @@ impl<'a> Song<'a> {
             }
         }
         if !chords_string.is_empty() {
-            chords.push(Span::styled(chords_string, theme.chord));
+            chords.push(Span::styled(chords_string, theme.chord.to_style()));
         }
         if !lyrics_string.is_empty() {
             spans.push(Span::from(lyrics_string));

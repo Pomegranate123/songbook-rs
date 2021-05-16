@@ -35,7 +35,7 @@ where
         Block::default()
             .borders(Borders::ALL)
             .border_style(if app.searching {
-                app.config.theme.selected
+                app.config.theme.selected.to_style()
             } else {
                 Style::default()
             })
