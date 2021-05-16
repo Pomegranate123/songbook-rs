@@ -32,6 +32,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut opts = Options::new();
     opts.optopt("c", "config", "set config file", "CONFIG");
     opts.optflag("h", "help", "print this help menu");
+    opts.optflag("", "default-config", "write the default config");
+
     let matches = match opts.parse(&args[1..]) {
         Ok(m) => m,
         Err(f) => {
@@ -44,6 +46,13 @@ fn main() -> Result<(), Box<dyn Error>> {
         return Ok(());
     }
 
+    if matches.opt_present("default-config") && matches.opt_present("c") {
+        let path = std::path::PathBuf::from(matches.opt_str("c").unwrap());
+        Config::write_default(&path)?;
+        println!("Default config has been written to {}", path.display());
+        return Ok(());
+    }
+
     let stdout = io::stdout().into_raw_mode()?;
     let backend = TermionBackend::new(stdout);
 
@@ -53,6 +62,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         tick_rate: Duration::from_millis(250),
     });
 
+    // If a config file is supplied load it otherwise use default settings
     let mut app = match matches.opt_str("c") {
         Some(config) => {
             let path = std::path::PathBuf::from(&config);

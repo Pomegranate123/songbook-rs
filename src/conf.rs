@@ -28,7 +28,21 @@ impl Default for Config {
 impl Config {
     pub fn load(file: &std::path::Path) -> Result<Config, Box<dyn std::error::Error>> {
         let contents = std::fs::read_to_string(file)?;
-        Ok(toml::from_str(&contents)?)
+        Ok(serde_yaml::from_str(&contents)?)
+    }
+
+    pub fn write_default(file: &std::path::Path) -> Result<(), Box<dyn std::error::Error>> {
+        if file.exists() {
+            return Err(Box::new(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "File already exists",
+            )));
+        }
+
+        let conf = Config::default();
+        let contents = serde_yaml::to_string(&conf)?;
+        std::fs::write(file, &contents)?;
+        Ok(())
     }
 }
 
