@@ -88,62 +88,51 @@ fn main() -> Result<(), Box<dyn Error>> {
         })?;
 
         match events.next()? {
-            Event::Input(key) => match key {
-                _ if key == *app.config.keybinds.search && !app.searching => app.searching = true,
-                _ if key == *app.config.keybinds.quit => break,
-                Key::Char(c) => {
-                    if app.searching {
-                        app.input.push(c);
-                        app.files.items = app.search(&app.input);
-                        let len_results = app.files.items.len();
-                        if let Some(index) = app.files.selected() {
-                            if index >= len_results {
-                                if app.files.items.is_empty() {
-                                    app.files.select(None);
-                                } else {
-                                    app.files.select(Some(len_results - 1));
-                                }
-                            }
+            Event::Input(key) => {
+                if app.searching {
+                    match key {
+                        Key::Char(c) => {
+                            app.input.push(c);
+                            app.files.items = app.search(&app.input);
+                            app.files.select(None);
                         }
-                    } else if key == *app.config.keybinds.search {
-                        app.searching = true;
+                        Key::Backspace => {
+                            app.input.pop();
+                            app.files.items = app.search(&app.input);
+                        }
+                        Key::Esc => app.searching = false,
+                        _ => (),
                     }
-                }
-                Key::Down => {
+                } else if key == *app.config.keybinds.down {
                     app.files.forward(1);
                     if app.config.auto_select_song {
                         app.load_selected()
                     }
-                }
-                Key::Up => {
+                } else if key == *app.config.keybinds.up {
                     app.files.back(1);
                     if app.config.auto_select_song {
                         app.load_selected()
                     }
-                }
-                Key::PageDown => {
+                } else if key == *app.config.keybinds.jump_down {
                     app.files.forward(20);
                     if app.config.auto_select_song {
                         app.load_selected()
                     }
-                }
-                Key::PageUp => {
+                } else if key == *app.config.keybinds.jump_up {
                     app.files.back(20);
                     if app.config.auto_select_song {
                         app.load_selected()
                     }
-                }
-                Key::Backspace => {
-                    if app.searching {
-                        app.input.pop();
-                        app.files.items = app.search(&app.input);
-                    }
-                }
-                Key::Right => app.load_selected(),
-                Key::Left => app.path_back(),
-                Key::Esc => app.searching = false,
-                _ => (),
-            },
+                } else if key == *app.config.keybinds.next {
+                    app.load_selected()
+                } else if key == *app.config.keybinds.back {
+                    app.path_back()
+                } else if key == *app.config.keybinds.search {
+                    app.searching = true
+                } else if key == *app.config.keybinds.quit {
+                    break;
+                };
+            }
             Event::Tick => (),
         }
     }

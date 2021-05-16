@@ -75,20 +75,32 @@ impl Default for Theme {
 
 #[derive(Serialize, Deserialize)]
 pub struct Keybinds {
-    pub quit: SerDeKey,
+    pub up: SerDeKey,
+    pub down: SerDeKey,
+    pub next: SerDeKey,
+    pub back: SerDeKey,
+    pub jump_up: SerDeKey,
+    pub jump_down: SerDeKey,
     pub search: SerDeKey,
+    pub quit: SerDeKey,
 }
 
 impl Default for Keybinds {
     fn default() -> Self {
         Keybinds {
-            quit: SerDeKey(Key::Ctrl('c')),
+            up: SerDeKey(Key::Up),
+            down: SerDeKey(Key::Down),
+            next: SerDeKey(Key::Right),
+            back: SerDeKey(Key::Left),
+            jump_up: SerDeKey(Key::PageUp),
+            jump_down: SerDeKey(Key::PageDown),
             search: SerDeKey(Key::Char('/')),
+            quit: SerDeKey(Key::Ctrl('c')),
         }
     }
 }
 
-/// Style wrapper which uses SerDeModifier in order to be readable when serialized
+/// Style replacement which uses SerDeModifier in order to be readable when serialized
 #[derive(Serialize, Deserialize)]
 pub struct ConfStyle {
     pub fg: Option<Color>,
