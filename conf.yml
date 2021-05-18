@@ -1,3 +1,4 @@
+---
 path: "."
 theme:
   title:
@@ -20,6 +21,12 @@ theme:
     modifiers:
       - Bold
 keybinds:
-  quit: Ctrl+c
+  up: Up
+  down: Down
+  next: Right
+  back: Left
+  jump_up: PageUp
+  jump_down: PageDown
   search: /
+  quit: Ctrl+c
 auto_select_song: false

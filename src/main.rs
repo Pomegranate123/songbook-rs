@@ -48,9 +48,6 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     if let Some(arg) = matches.opt_str("default-config") {
         let path = std::path::PathBuf::from(&arg);
-        if !path.exists() {
-            panic!("Path '{}' doesn't exist", arg)
-        }
         Config::write_default(&path)?;
         println!("Default config has been written to {}", path.display());
         return Ok(());
