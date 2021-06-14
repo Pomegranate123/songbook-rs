@@ -79,7 +79,12 @@ impl<'a> App<'a> {
 
     fn list_files(path: &str) -> Vec<FolderEntry> {
         let mut files: Vec<_> = fs::read_dir(path)
-            .unwrap()
+            .unwrap_or_else(|_| {
+                panic!(
+                    "Path {} not found. Make sure the path in your config ends with a '/'!",
+                    path
+                )
+            })
             .map(|dir| dir.unwrap())
             .collect();
         files.sort_by_key(|dir| dir.path());

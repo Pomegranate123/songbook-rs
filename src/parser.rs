@@ -15,11 +15,126 @@ lazy_static! {
 }
 
 #[derive(Debug, Default, Clone)]
+pub struct SongLine<'a> {
+    pub chords: Option<Spans<'a>>,
+    pub text: Option<Spans<'a>>,
+}
+
+impl<'a> SongLine<'a> {
+    pub fn from(chords: Spans<'a>, text: Spans<'a>) -> Self {
+        SongLine {
+            chords: Some(chords),
+            text: Some(text),
+        }
+    }
+    pub fn from_text(text: Spans<'a>) -> Self {
+        SongLine {
+            chords: None,
+            text: Some(text),
+        }
+    }
+
+    pub fn from_chords(chords: Spans<'a>) -> Self {
+        SongLine {
+            chords: Some(chords),
+            text: None,
+        }
+    }
+
+    pub fn width(&self) -> usize {
+        match (&self.chords, &self.text) {
+            (Some(c), Some(t)) => std::cmp::max(c.width(), t.width()),
+            (Some(c), None) => c.width(),
+            (None, Some(t)) => t.width(),
+            (None, None) => 0,
+        }
+    }
+
+    pub fn split_at(&self, index: usize) -> Result<(Self, Self), &'static str> {
+        if index >= self.width() {
+            return Err("Split index larger than width");
+        }
+
+        match (&self.chords, &self.text) {
+            (Some(c), Some(t)) => {
+                let (cleft, cright) = Self::split_spans(c, index)?;
+                let (tleft, tright) = Self::split_spans(t, index)?;
+                Ok((Self::from(cleft, tleft), Self::from(cright, tright)))
+            }
+            (Some(c), None) => {
+                let (cleft, cright) = Self::split_spans(c, index)?;
+                Ok((Self::from_chords(cleft), Self::from_chords(cright)))
+            }
+            (None, Some(t)) => {
+                let (tleft, tright) = Self::split_spans(t, index)?;
+                Ok((Self::from_text(tleft), Self::from_text(tright)))
+            }
+            (None, None) => Err("No content to split on"),
+        }
+    }
+
+    fn split_spans(
+        spans: &Spans<'a>,
+        index: usize,
+    ) -> Result<(Spans<'a>, Spans<'a>), &'static str> {
+        if index >= spans.width() {
+            return Err("Split index larger than width");
+        }
+
+        let mut left = vec![];
+        let mut right = vec![];
+        let mut spanswidth = 0;
+
+        for span in &spans.0 {
+            let spanwidth = span.width();
+            if spanswidth + spanwidth > index && spanswidth < index {
+                let mut content = span.content.chars();
+                let span_left = Span::styled(
+                    content
+                        .by_ref()
+                        .take(index - spanswidth)
+                        .collect::<String>(),
+                    span.style,
+                );
+                let span_right = Span::styled(content.collect::<String>(), span.style);
+                spanswidth += span.width();
+                left.push(span_left);
+                right.push(span_right);
+            } else if spanswidth < index {
+                spanswidth += span.width();
+                left.push(span.clone());
+            } else {
+                right.push(span.clone());
+            }
+        }
+        Ok((Spans::from(left), Spans::from(right)))
+    }
+
+    pub fn len(&self) -> usize {
+        match (&self.chords, &self.text) {
+            (Some(_), Some(_)) => 2,
+            (Some(_), None) => 1,
+            (None, Some(_)) => 1,
+            (None, None) => 0,
+        }
+    }
+
+    pub fn as_spans(&self) -> Vec<Spans<'a>> {
+        match (self.chords, self.text) {
+            (Some(c), Some(t)) => vec![c, t],
+            (Some(c), None) => vec![c],
+            (None, Some(t)) => vec![t],
+            (None, None) => vec![],
+        }
+    }
+}
+
+#[derive(Debug, Default, Clone)]
 pub struct Song<'a> {
     pub title: String,
     pub subtitle: String,
     pub songstring: String,
-    pub text: Vec<Spans<'a>>,
+    pub text: Vec<SongLine<'a>>,
 }
 
 impl<'a> Song<'a> {
@@ -44,7 +159,7 @@ impl<'a> Song<'a> {
         let mut transposition = 0;
         'lines: for line in songstring.lines() {
             let mut chords: Vec<Span<'a>> = vec![];
-            let mut spans = vec![];
+            let mut text = vec![];
             for section in Song::regex_split_keep(&RE_TAGS, &line) {
                 match RE_TAGS.captures(&section) {
                     Some(cap) => match cap.get(1).unwrap().as_str() {
@@ -55,8 +170,10 @@ impl<'a> Song<'a> {
                         "st" | "subtitle" => {
                             let subtitle = String::from(cap.get(2).unwrap().as_str().trim());
                             song.subtitle = subtitle.clone();
-                            song.text
-                                .push(Spans::from(Span::styled(subtitle, theme.title.to_style())));
+                            song.text.push(SongLine::from_text(Spans::from(Span::styled(
+                                subtitle,
+                                theme.title.to_style(),
+                            ))));
                             continue 'lines;
                         }
                         "key" => {
@@ -74,7 +191,7 @@ impl<'a> Song<'a> {
                             transposition -=
                                 cap.get(2).unwrap().as_str().trim().parse::<i32>().unwrap()
                         }
-                        "c" => spans.push(Span::styled(
+                        "c" => text.push(Span::styled(
                             String::from(cap.get(2).unwrap().as_str()),
                             theme.comment.to_style(),
                         )),
@@ -89,7 +206,7 @@ impl<'a> Song<'a> {
                         _ => {}
                     },
                     None => match comment {
-                        true => spans.push(Span::styled(
+                        true => text.push(Span::styled(
                             String::from(section),
                             theme.comment.to_style(),
                         )),
@@ -97,15 +214,15 @@ impl<'a> Song<'a> {
                             &section,
                             &theme,
                             &mut chords,
-                            &mut spans,
+                            &mut text,
                             transposition,
                         ),
                     },
                 }
             }
             if chorus {
-                if !spans.is_empty() {
-                    spans.insert(
+                if !text.is_empty() {
+                    text.insert(
                         0,
                         Span::styled(String::from("| "), theme.comment.to_style()),
                     );
@@ -119,9 +236,11 @@ impl<'a> Song<'a> {
             }
 
             if !chords.is_empty() {
-                song.text.push(Spans::from(chords));
+                song.text
+                    .push(SongLine::from(Spans::from(chords), Spans::from(text)));
+            } else {
+                song.text.push(SongLine::from_text(Spans::from(text)));
             }
-            song.text.push(Spans::from(spans));
         }
         song
     }
@@ -161,7 +280,6 @@ impl<'a> Song<'a> {
 
                     let chord_tag = chord.get(1).unwrap().as_str();
 
-                    //TODO: Transposition
                     let parsed_chord = RE_ROOT_NOTE.replace_all(chord_tag, |caps: &Captures| {
                         PitchClass::from_interval(
                             PitchClass::from_str(&caps.get(0).unwrap().as_str()).unwrap(),
@@ -169,7 +287,6 @@ impl<'a> Song<'a> {
                         )
                         .to_string()
                     });
-                    // Interval::from_semitone((transposition % 12) as u8).unwrap(),
                     chords_string.push_str(&parsed_chord);
                     chords_string.push(' ');
                 }

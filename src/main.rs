@@ -11,7 +11,7 @@ use crate::{
     util::event::{self, Event, Events},
 };
 use getopts::Options;
-use std::{error::Error, io, time::Duration};
+use std::{env, error::Error, io, time::Duration};
 use termion::{event::Key, raw::IntoRawMode};
 use tui::{
     backend::TermionBackend,
@@ -61,7 +61,11 @@ fn main() -> Result<(), Box<dyn Error>> {
             }
             Config::load(&path)?
         }
-        None => Config::default(),
+        None => {
+            let config_path = env::var("GPRO_CONFIG")
+                .unwrap_or_else(|_| String::from("/home/pomegranate/git/gpro-rs/conf.yml"));
+            Config::load(&std::path::PathBuf::from(config_path)).unwrap_or_default()
+        }
     };
 
     let stdout = io::stdout().into_raw_mode()?;
@@ -86,17 +90,23 @@ fn main() -> Result<(), Box<dyn Error>> {
 
             ui::draw_search_list(f, &mut app, layout[0]);
             ui::draw_song_block(f, &app, layout[1]);
+            //            ui::draw_test(f, &mut app, Rect::new(0, 0, 20, 50));
+            //            ui::draw_test(f, &mut app, Rect::new(20, 0, 40, 50));
+            //            ui::draw_test(f, &mut app, Rect::new(60, 0, 80, 50));
         })?;
 
         match events.next()? {
             Event::Input(key) => {
                 if app.searching {
                     match key {
-                        Key::Char(c) => {
-                            app.input.push(c);
-                            app.files.items = app.search(&app.input);
-                            app.files.select(None);
-                        }
+                        Key::Char(c) => match c {
+                            '\n' => (),
+                            _ => {
+                                app.input.push(c);
+                                app.files.items = app.search(&app.input);
+                                app.files.select(None);
+                            }
+                        },
                         Key::Backspace => {
                             app.input.pop();
                             app.files.items = app.search(&app.input);
