@@ -75,19 +75,11 @@ where
                 .borders(Borders::ALL);
 
             let song_rect = song_block.inner(layout_chunk);
-            let text = wrap_lines(&song.text, song_rect);
+            let text = wrap_lines(&song.text, song_rect, song_rect.width as usize);
 
             let constraints: Vec<Constraint> = text
                 .iter()
-                .map(|column| {
-                    Constraint::Length(
-                        column
-                            .iter()
-                            .max_by_key(|i| i.width())
-                            .unwrap_or(&Spans::from(Span::from("This is an empty column")))
-                            .width() as u16,
-                    )
-                })
+                .map(|column| Constraint::Length(column.width() as u16))
                 .collect();
 
             let song_layout = Layout::default()
@@ -97,7 +89,7 @@ where
                 .split(layout_chunk);
 
             for (i, column) in song_layout.iter().enumerate() {
-                f.render_widget(Paragraph::new(Text::from(text[i].to_owned())), *column);
+                f.render_widget(Paragraph::new(Text::from(text[i].to_spans())), *column);
             }
             f.render_widget(song_block, layout_chunk);
         }
@@ -126,7 +118,7 @@ where
         &Theme::default(),
     )
     .text;
-    let text = wrap_lines(&text, song_rect);
+    let text = wrap_lines(&text, song_rect, song_rect.width as usize);
     let height = (song_rect.height - 2) as usize;
     let columncount = text.len() / height + 1;
 
@@ -142,11 +134,12 @@ where
         .split(song_rect);
 
     for (i, column) in song_layout.iter().enumerate() {
-        f.render_widget(Paragraph::new(Text::from(text[i].to_owned())), *column);
+        f.render_widget(Paragraph::new(Text::from(text[i].to_spans())), *column);
     }
     f.render_widget(song_block, song_rect);
 }
 
+#[derive(Default)]
 struct Column<'a> {
     content: Vec<SongLine<'a>>,
 }
@@ -157,53 +150,73 @@ impl<'a> Column<'a> {
     }
 
     pub fn height(&self) -> usize {
-        self.content.iter().map(|line| line.len()).sum()
+        self.content.iter().map(|line| line.height()).sum()
+    }
+
+    pub fn width(&self) -> usize {
+        self.content
+            .iter()
+            .map(|line| line.width())
+            .max()
+            .unwrap_or(0)
     }
 
     pub fn to_spans(&self) -> Vec<Spans<'a>> {
         self.content
             .iter()
-            .flat_map(|line| line.as_spans())
+            .cloned()
+            .flat_map(|line| line.to_spans())
             .collect()
     }
 }
 
-fn wrap_lines<'a>(text: &[SongLine<'a>], container: Rect) -> Vec<Vec<Spans<'a>>> {
+fn wrap_lines<'a>(
+    text: &[SongLine<'a>],
+    container: Rect,
+    max_column_width: usize,
+) -> Vec<Column<'a>> {
     let height = (container.height - 2) as usize;
     let width = (container.width - 2) as usize;
 
-    let mut column_wrapped_text: Vec<Column> = vec![];
-    let mut columnheight = 0;
-    let mut rest = text;
-    for i in 0..text.len() {
-        if columnheight + text[i].len() > height {
-            let (column, rest) = rest.split_at(i);
-            column_wrapped_text.push(Column::from(column.to_vec()));
-            columnheight = 0;
-        } else {
-            columnheight += text[i].len();
-        }
-    }
-    column_wrapped_text.push(column);
+    let wrapped_text = text.iter().for_each(|line| {});
 
-    let total_width = column_wrapped_text
-        .iter()
-        .map(|column| column.iter().max_by_key(|i| i.width()).unwrap().width())
-        .sum::<usize>();
-    if total_width > width {}
-
-    let columncount = text.len() / height + 1;
     let line_wrapped_text: Vec<SongLine> = text
         .iter()
         .flat_map(|line| {
-            if line.width() > width / columncount {
-                let split_line = line.split_at(width).unwrap();
+            if line.width() > max_column_width {
+                let split_line = line.split_at(max_column_width).unwrap();
                 vec![split_line.0, split_line.1]
             } else {
                 vec![line.clone()]
             }
         })
         .collect();
+
+    let mut column_wrapped_text: Vec<Column> = vec![];
+    let mut columnheight = 0;
+    let mut rest = text;
+    let mut i = 0;
+    line_wrapped_text.iter().for_each(|line| {
+        if columnheight + line.height() > height {
+            let split_text = rest.split_at(i);
+            rest = split_text.1;
+            column_wrapped_text.push(Column::from(split_text.0.to_vec()));
+            columnheight = 0;
+            i = 0;
+        } else {
+            columnheight += line.height();
+            i += 1;
+        }
+    });
+    column_wrapped_text.push(Column::from(rest.to_vec()));
+
+    let total_width = column_wrapped_text
+        .iter()
+        .map(|column| column.width())
+        .sum::<usize>();
+    if total_width > width {
+        column_wrapped_text = wrap_lines(text, container, max_column_width - 1)
+    }
 
     column_wrapped_text
 }
@@ -228,7 +241,7 @@ mod tests {
         )
         .text;
         let container = Rect::new(0, 0, 20, 20);
-        let wrappedtext = wrap_lines(&text, container);
-        println!("{:#?}", wrappedtext);
+        let wrappedtext = wrap_lines(&text, container, container.width as usize);
+        //println!("{:#?}", wrappedtext);
     }
 }

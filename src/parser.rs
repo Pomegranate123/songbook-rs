@@ -50,36 +50,58 @@ impl<'a> SongLine<'a> {
         }
     }
 
-    pub fn split_at(&self, index: usize) -> Result<(Self, Self), &'static str> {
+    pub fn height(&self) -> usize {
+        match (&self.chords, &self.text) {
+            (Some(_), Some(_)) => 2,
+            (Some(_), None) => 1,
+            (None, Some(_)) => 1,
+            (None, None) => 0,
+        }
+    }
+
+    pub fn split_at(&self, index: usize) -> Result<Vec<Self>, String> {
         if index >= self.width() {
-            return Err("Split index larger than width");
+            return Err(format!(
+                "Split index ({}) larger than width ({})",
+                index,
+                self.width()
+            ));
         }
 
         match (&self.chords, &self.text) {
             (Some(c), Some(t)) => {
-                let (cleft, cright) = Self::split_spans(c, index)?;
-                let (tleft, tright) = Self::split_spans(t, index)?;
-                Ok((Self::from(cleft, tleft), Self::from(cright, tright)))
+                let chordlines = Self::split_spans(c, index);
+                let textlines = Self::split_spans(t, index);
+                Ok(chordlines
+                    .iter()
+                    .zip(textlines.iter())
+                    .map(|(chords, text)| Self::from(*chords, *text))
+                    .collect())
             }
             (Some(c), None) => {
-                let (cleft, cright) = Self::split_spans(c, index)?;
-                Ok((Self::from_chords(cleft), Self::from_chords(cright)))
+                let chords = Self::split_spans(c, index);
+                Ok(chords.iter().map(|line| Self::from_chords(*line)).collect())
             }
             (None, Some(t)) => {
-                let (tleft, tright) = Self::split_spans(t, index)?;
-                Ok((Self::from_text(tleft), Self::from_text(tright)))
+                let text = Self::split_spans(t, index);
+                Ok(text.iter().map(|line| Self::from_chords(*line)).collect())
             }
-            (None, None) => Err("No content to split on"),
+            (None, None) => Err("No content to split on".to_string()),
         }
     }
 
-    fn split_spans(
-        spans: &Spans<'a>,
-        index: usize,
-    ) -> Result<(Spans<'a>, Spans<'a>), &'static str> {
+    fn split_spans(spans: &Spans<'a>, index: usize) -> Vec<Spans<'a>> {
         if index >= spans.width() {
-            return Err("Split index larger than width");
+            return vec![spans.clone()];
         }
+
+        let mut totalwidth = 0;
+        
+        spans.0.iter().for_each(|span| {
+            let spanwidth = span.width();
+            if totalwidth + spanwidth > index && totalwidth < index
+            
+        })
 
         let mut left = vec![];
         let mut right = vec![];
@@ -107,19 +129,9 @@ impl<'a> SongLine<'a> {
                 right.push(span.clone());
             }
         }
-        Ok((Spans::from(left), Spans::from(right)))
     }
 
-    pub fn len(&self) -> usize {
-        match (&self.chords, &self.text) {
-            (Some(_), Some(_)) => 2,
-            (Some(_), None) => 1,
-            (None, Some(_)) => 1,
-            (None, None) => 0,
-        }
-    }
-
-    pub fn as_spans(&self) -> Vec<Spans<'a>> {
+    pub fn to_spans(self) -> Vec<Spans<'a>> {
         match (self.chords, self.text) {
             (Some(c), Some(t)) => vec![c, t],
             (Some(c), None) => vec![c],
