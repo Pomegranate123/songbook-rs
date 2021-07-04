@@ -27,6 +27,10 @@ keybinds:
   back: Left
   jump_up: PageUp
   jump_down: PageDown
+  col_size_inc: End
+  col_size_dec: Home
   search: /
   quit: Ctrl+c
 auto_select_song: false
+extra_column_size: 15
+column_padding: 4

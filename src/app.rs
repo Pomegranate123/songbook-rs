@@ -1,12 +1,11 @@
-extern crate rust_music_theory as rustmt;
 use crate::{
     conf::Config,
     parser::{Playlist, Song},
-    util::{FolderEntry, StatefulList},
+    util::{FileType, StatefulList},
 };
 use lazy_static::lazy_static;
 use regex::Regex;
-use rustmt::note::PitchClass;
+use rust_music_theory::note::PitchClass;
 use std::{collections::HashMap, fs};
 
 lazy_static! {
@@ -16,12 +15,13 @@ lazy_static! {
 #[derive(Default)]
 pub struct App<'a> {
     pub files: StatefulList,
-    pub filemap: HashMap<FolderEntry, String>,
+    pub filemap: HashMap<FileType, String>,
     pub config: Config,
     pub song: Option<Song<'a>>,
     pub searching: bool,
     pub input: String,
     pub path: Vec<String>,
+    pub extra_column_size: usize,
 }
 
 impl<'a> App<'a> {
@@ -31,12 +31,13 @@ impl<'a> App<'a> {
         App {
             files: StatefulList::with_items(files),
             filemap: App::map_files(&config.path),
+            extra_column_size: config.extra_column_size,
             config,
             ..Default::default()
         }
     }
 
-    fn map_files(path: &str) -> HashMap<FolderEntry, String> {
+    fn map_files(path: &str) -> HashMap<FileType, String> {
         let mut files: Vec<_> = fs::read_dir(path)
             .unwrap()
             .flat_map(|dir| {
@@ -58,16 +59,16 @@ impl<'a> App<'a> {
                 let filename = filename.to_str().unwrap();
                 if file.path().is_dir() {
                     Some((
-                        FolderEntry::Folder(filename.to_owned()),
+                        FileType::Folder(filename.to_owned()),
                         file.path().to_str().unwrap().to_owned(),
                     ))
                 } else if filename.ends_with(".txt") {
                     let filestring = fs::read_to_string(file.path()).unwrap();
-                    Some((FolderEntry::Song(Song::get_name(&filestring)), filestring))
+                    Some((FileType::Song(Song::get_name(&filestring)), filestring))
                 } else if filename.ends_with(".lst") {
                     let filestring = fs::read_to_string(file.path()).unwrap();
                     Some((
-                        FolderEntry::Playlist(filename.trim_end_matches(".lst").to_owned()),
+                        FileType::Playlist(filename.trim_end_matches(".lst").to_owned()),
                         filestring,
                     ))
                 } else {
@@ -77,14 +78,9 @@ impl<'a> App<'a> {
             .collect()
     }
 
-    fn list_files(path: &str) -> Vec<FolderEntry> {
+    fn list_files(path: &str) -> Vec<FileType> {
         let mut files: Vec<_> = fs::read_dir(path)
-            .unwrap_or_else(|_| {
-                panic!(
-                    "Path {} not found. Make sure the path in your config ends with a '/'!",
-                    path
-                )
-            })
+            .unwrap_or_else(|_| panic!("Path {} not found.", path))
             .map(|dir| dir.unwrap())
             .collect();
         files.sort_by_key(|dir| dir.path());
@@ -94,13 +90,13 @@ impl<'a> App<'a> {
                 let filename = file.file_name();
                 let filename = filename.to_str().unwrap();
                 if file.path().is_dir() {
-                    Some(FolderEntry::Folder(filename.to_owned()))
+                    Some(FileType::Folder(filename.to_owned()))
                 } else if filename.ends_with(".txt") {
-                    Some(FolderEntry::Song(Song::get_name(
+                    Some(FileType::Song(Song::get_name(
                         &fs::read_to_string(file.path()).unwrap(),
                     )))
                 } else if filename.ends_with(".lst") {
-                    Some(FolderEntry::Playlist(String::from(
+                    Some(FileType::Playlist(String::from(
                         filename.trim_end_matches(".lst"),
                     )))
                 } else {
@@ -140,17 +136,20 @@ impl<'a> App<'a> {
     pub fn load_selected(&mut self) {
         if let Some(file) = self.files.get_selected_item() {
             match file {
-                FolderEntry::Song(songname) => {
+                FileType::Song(songname) => {
                     match self.filemap.get(&file) {
                         Some(value) => {
                             self.song = Some(Song::from(value.clone(), &self.config.theme))
                         }
                         None => {
+                            // This is for songs in playlists. If they are transposed, the last
+                            // characters will be the new key. This code tries to find a song
+                            // without those characters, and if it finds it, it loads it in the new
+                            // key.
                             if let Some(key) = RE_SONG_TRANSPOSITION.captures(songname) {
                                 let actual_name = RE_SONG_TRANSPOSITION.replace(songname, "");
-                                if let Some(value) = self
-                                    .filemap
-                                    .get(&FolderEntry::Song(actual_name.to_string()))
+                                if let Some(value) =
+                                    self.filemap.get(&FileType::Song(actual_name.to_string()))
                                 {
                                     self.song = Some(Song::in_key(
                                         value.clone(),
@@ -169,20 +168,20 @@ impl<'a> App<'a> {
                     }
                 }
 
-                FolderEntry::Playlist(_) => {
+                FileType::Playlist(_) => {
                     if let Some(playlist) = self.filemap.get(file) {
-                        let playlist = Playlist::new(playlist.clone());
+                        let playlist = Playlist::from(playlist.clone());
                         self.files.items = playlist.songs;
                     }
                     self.files.select(None);
                 }
-                FolderEntry::Folder(path) => self.path_forward(&path.to_string()),
+                FileType::Folder(path) => self.path_forward(&path.to_string()),
             }
         }
     }
 
-    pub fn search(&self, query: &str) -> Vec<FolderEntry> {
-        let mut results: Vec<FolderEntry>;
+    pub fn search(&self, query: &str) -> Vec<FileType> {
+        let mut results: Vec<FileType>;
         results = self
             .filemap
             .iter()

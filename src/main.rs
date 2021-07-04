@@ -138,6 +138,12 @@ fn main() -> Result<(), Box<dyn Error>> {
                     app.load_selected()
                 } else if key == *app.config.keybinds.back {
                     app.path_back()
+                } else if key == *app.config.keybinds.col_size_inc {
+                    app.extra_column_size += 1;
+                } else if key == *app.config.keybinds.col_size_dec {
+                    if app.extra_column_size > 0 {
+                        app.extra_column_size -= 1;
+                    }
                 } else if key == *app.config.keybinds.search {
                     app.searching = true
                 } else if key == *app.config.keybinds.quit {

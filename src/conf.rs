@@ -14,6 +14,8 @@ pub struct Config {
     pub theme: Theme,
     pub keybinds: Keybinds,
     pub auto_select_song: bool,
+    pub extra_column_size: usize,
+    pub column_padding: usize,
 }
 
 impl Default for Config {
@@ -23,6 +25,8 @@ impl Default for Config {
             theme: Theme::default(),
             keybinds: Keybinds::default(),
             auto_select_song: false,
+            extra_column_size: 15,
+            column_padding: 2,
         }
     }
 }
@@ -81,6 +85,8 @@ pub struct Keybinds {
     pub back: SerDeKey,
     pub jump_up: SerDeKey,
     pub jump_down: SerDeKey,
+    pub col_size_inc: SerDeKey,
+    pub col_size_dec: SerDeKey,
     pub search: SerDeKey,
     pub quit: SerDeKey,
 }
@@ -94,6 +100,8 @@ impl Default for Keybinds {
             back: SerDeKey(Key::Left),
             jump_up: SerDeKey(Key::PageUp),
             jump_down: SerDeKey(Key::PageDown),
+            col_size_inc: SerDeKey(Key::End),
+            col_size_dec: SerDeKey(Key::Home),
             search: SerDeKey(Key::Char('/')),
             quit: SerDeKey(Key::Ctrl('c')),
         }

@@ -1,6 +1,7 @@
 extern crate rust_music_theory as rustmt;
 
-use crate::{conf::Theme, util::FolderEntry};
+use crate::{conf::Theme, util::FileType};
+use itertools::{EitherOrBoth::*, Itertools};
 use lazy_static::lazy_static;
 use regex::{Captures, Regex};
 use rustmt::{interval::Interval, note::PitchClass};
@@ -59,79 +60,93 @@ impl<'a> SongLine<'a> {
         }
     }
 
-    pub fn split_at(&self, index: usize) -> Result<Vec<Self>, String> {
-        if index >= self.width() {
-            return Err(format!(
-                "Split index ({}) larger than width ({})",
-                index,
-                self.width()
-            ));
-        }
-
+    pub fn wrap(&self, maxwidth: usize) -> Vec<Self> {
         match (&self.chords, &self.text) {
             (Some(c), Some(t)) => {
-                let chordlines = Self::split_spans(c, index);
-                let textlines = Self::split_spans(t, index);
-                Ok(chordlines
-                    .iter()
-                    .zip(textlines.iter())
-                    .map(|(chords, text)| Self::from(*chords, *text))
-                    .collect())
+                let chordlines = Self::wrap_spans(c, maxwidth);
+                let textlines = Self::wrap_spans(t, maxwidth);
+                chordlines
+                    .into_iter()
+                    .zip_longest(textlines.into_iter())
+                    .map(|pair| match pair {
+                        Both(chords, text) => Self::from(chords, text),
+                        Left(chords) => Self::from_chords(chords),
+                        Right(text) => Self::from_text(text),
+                    })
+                    .collect()
             }
             (Some(c), None) => {
-                let chords = Self::split_spans(c, index);
-                Ok(chords.iter().map(|line| Self::from_chords(*line)).collect())
+                let chords = Self::wrap_spans(c, maxwidth);
+                chords.into_iter().map(Self::from_chords).collect()
             }
             (None, Some(t)) => {
-                let text = Self::split_spans(t, index);
-                Ok(text.iter().map(|line| Self::from_chords(*line)).collect())
+                let text = Self::wrap_spans(t, maxwidth);
+                text.into_iter().map(Self::from_text).collect()
             }
-            (None, None) => Err("No content to split on".to_string()),
+            (None, None) => vec![],
         }
     }
 
-    fn split_spans(spans: &Spans<'a>, index: usize) -> Vec<Spans<'a>> {
-        if index >= spans.width() {
+    fn wrap_spans(spans: &Spans<'a>, max_width: usize) -> Vec<Spans<'a>> {
+        if max_width >= spans.width() {
             return vec![spans.clone()];
         }
 
-        let mut totalwidth = 0;
-        
-        spans.0.iter().for_each(|span| {
-            let spanwidth = span.width();
-            if totalwidth + spanwidth > index && totalwidth < index
-            
-        })
+        let mut spans = spans.0.iter();
+        let mut span;
+        let mut total_width = 0;
+        let mut wrapped_span = vec![];
+        let mut wrapped_spans = vec![];
 
-        let mut left = vec![];
-        let mut right = vec![];
-        let mut spanswidth = 0;
+        loop {
+            span = match spans.next() {
+                Some(s) => s.clone(),
+                None => break,
+            };
 
-        for span in &spans.0 {
-            let spanwidth = span.width();
-            if spanswidth + spanwidth > index && spanswidth < index {
-                let mut content = span.content.chars();
-                let span_left = Span::styled(
-                    content
-                        .by_ref()
-                        .take(index - spanswidth)
-                        .collect::<String>(),
-                    span.style,
-                );
-                let span_right = Span::styled(content.collect::<String>(), span.style);
-                spanswidth += span.width();
-                left.push(span_left);
-                right.push(span_right);
-            } else if spanswidth < index {
-                spanswidth += span.width();
-                left.push(span.clone());
+            let mut span_width = span.width();
+
+            if total_width + span_width < max_width {
+                wrapped_span.push(span.clone());
+                total_width += span.width();
             } else {
-                right.push(span.clone());
+                while total_width + span_width > max_width {
+                    let wrap_index = if span_width < max_width {
+                        max_width
+                    } else {
+                        max_width
+                            // This gets the highest index possible that does not cut off a word or
+                            // chord
+                            - span
+                                .content
+                                .chars()
+                                .rev()
+                                .skip(span_width - max_width)
+                                .take_while(|&c| c != ' ' && c != '-')
+                                .count()
+                    };
+                    let mut content = span.content.chars();
+                    let span_left = Span::styled(
+                        content.by_ref().take(wrap_index).collect::<String>(),
+                        span.style,
+                    );
+                    span = Span::styled(content.collect::<String>(), span.style);
+
+                    wrapped_span.push(span_left);
+                    wrapped_spans.push(Spans::from(wrapped_span.clone()));
+                    wrapped_span = vec![];
+                    total_width = 0;
+                    span_width = span.width();
+                }
+                wrapped_span = vec![span];
             }
         }
+        wrapped_spans.push(Spans::from(wrapped_span.clone()));
+
+        wrapped_spans
     }
 
-    pub fn to_spans(self) -> Vec<Spans<'a>> {
+    pub fn into_spans(self) -> Vec<Spans<'a>> {
         match (self.chords, self.text) {
             (Some(c), Some(t)) => vec![c, t],
             (Some(c), None) => vec![c],
@@ -356,16 +371,16 @@ impl<'a> Song<'a> {
 
 pub struct Playlist {
     pub title: String,
-    pub songs: Vec<FolderEntry>,
+    pub songs: Vec<FileType>,
     pub playliststring: String,
 }
 
 impl Playlist {
-    pub fn new(playliststring: String) -> Self {
+    pub fn from(playliststring: String) -> Self {
         let mut lines = playliststring.lines();
         Playlist {
             title: lines.next().unwrap().to_string(),
-            songs: lines.map(|s| FolderEntry::Song(s.to_string())).collect(),
+            songs: lines.map(|s| FileType::Song(s.to_string())).collect(),
             playliststring,
         }
     }

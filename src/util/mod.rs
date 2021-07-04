@@ -5,32 +5,32 @@ pub mod event;
 use tui::widgets::ListState;
 
 #[derive(PartialEq, Eq, Hash, Clone)]
-pub enum FolderEntry {
+pub enum FileType {
     Folder(String),
     Song(String),
     Playlist(String),
 }
 
-impl FolderEntry {
+impl FileType {
     pub fn get(&self) -> String {
         match self {
-            FolderEntry::Folder(path) => path.to_owned(),
-            FolderEntry::Song(name) => name.to_owned(),
-            FolderEntry::Playlist(name) => name.to_owned(),
+            FileType::Folder(path) => path.to_owned(),
+            FileType::Song(name) => name.to_owned(),
+            FileType::Playlist(name) => name.to_owned(),
         }
     }
 }
 
-impl Default for FolderEntry {
+impl Default for FileType {
     fn default() -> Self {
-        FolderEntry::Song(String::default())
+        FileType::Song(String::default())
     }
 }
 
 #[derive(Default)]
 pub struct StatefulList {
     pub state: ListState,
-    pub items: Vec<FolderEntry>,
+    pub items: Vec<FileType>,
 }
 
 impl StatefulList {
@@ -41,7 +41,7 @@ impl StatefulList {
         }
     }
 
-    pub fn with_items(items: Vec<FolderEntry>) -> StatefulList {
+    pub fn with_items(items: Vec<FileType>) -> StatefulList {
         StatefulList {
             state: ListState::default(),
             items,
@@ -100,10 +100,7 @@ impl StatefulList {
         self.state.selected()
     }
 
-    pub fn get_selected_item(&self) -> Option<&FolderEntry> {
-        match self.state.selected() {
-            Some(index) => Some(&self.items[index]),
-            None => None,
-        }
+    pub fn get_selected_item(&self) -> Option<&FileType> {
+        self.state.selected().map(|index| &self.items[index])
     }
 }

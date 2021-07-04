@@ -16,3 +16,4 @@ rust-music-theory = "0.2.0"
 serde = { version = "1.0.125", features = ["derive"] }
 getopts = "0.2.21"
 serde_yaml = "0.8.17"
+itertools = "0.10.1"
