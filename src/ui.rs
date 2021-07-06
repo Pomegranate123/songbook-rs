@@ -1,4 +1,4 @@
-use crate::{app::App, parser::SongLine};
+use crate::{app::App, conf::Theme, parser::*};
 use tui::{
     backend::Backend,
     layout::{Constraint, Direction, Layout, Rect},
@@ -75,7 +75,7 @@ where
                 .borders(Borders::ALL);
 
             let song_rect = song_block.inner(layout_chunk);
-            let text = wrap_lines(&song.text, song_rect, app.extra_column_size);
+            let text = wrap_lines(&song.content, song_rect, app.extra_column_size);
 
             let constraints: Vec<Constraint> = text
                 .iter()
@@ -91,7 +91,10 @@ where
                 .split(layout_chunk);
 
             for (i, column) in song_layout.iter().enumerate() {
-                f.render_widget(Paragraph::new(Text::from(text[i].to_spans())), *column);
+                f.render_widget(
+                    Paragraph::new(Text::from(text[i].to_spans(&app.config.theme))),
+                    *column,
+                );
             }
             f.render_widget(song_block, layout_chunk);
         }
@@ -99,13 +102,13 @@ where
     }
 }
 
-#[derive(Default)]
-struct Column<'a> {
-    content: Vec<SongLine<'a>>,
+#[derive(Debug, Default)]
+pub struct Column {
+    content: Vec<SongLine>,
 }
 
-impl<'a> Column<'a> {
-    pub fn from(content: Vec<SongLine<'a>>) -> Self {
+impl<'a> Column {
+    pub fn from(content: Vec<SongLine>) -> Self {
         Column { content }
     }
 
@@ -117,27 +120,23 @@ impl<'a> Column<'a> {
             .unwrap_or(0)
     }
 
-    pub fn to_spans(&self) -> Vec<Spans<'a>> {
+    pub fn to_spans(&self, theme: &Theme) -> Vec<Spans<'a>> {
         self.content
             .iter()
             .cloned()
-            .flat_map(|line| line.into_spans())
+            .flat_map(|line| line.format(theme))
             .collect()
     }
 }
 
-fn wrap_lines<'a>(
-    text: &[SongLine<'a>],
-    container: Rect,
-    extra_column_size: usize,
-) -> Vec<Column<'a>> {
+pub fn wrap_lines(lines: &[SongLine], container: Rect, extra_column_size: usize) -> Vec<Column> {
     let height = (container.height - 2) as usize;
 
-    let mut line_widths = text.iter().map(|line| line.width()).collect::<Vec<usize>>();
+    let mut line_widths: Vec<usize> = lines.iter().map(|line| line.width()).collect();
     line_widths.sort_unstable();
     let median_width = line_widths[line_widths.len() / 2];
 
-    let line_wrapped_text: Vec<SongLine> = text
+    let line_wrapped_text: Vec<SongLine> = lines
         .iter()
         .flat_map(|line| line.wrap(median_width + extra_column_size))
         .collect();

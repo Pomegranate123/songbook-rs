@@ -13,18 +13,18 @@ lazy_static! {
 }
 
 #[derive(Default)]
-pub struct App<'a> {
+pub struct App {
     pub files: StatefulList,
     pub filemap: HashMap<FileType, String>,
     pub config: Config,
-    pub song: Option<Song<'a>>,
+    pub song: Option<Song>,
     pub searching: bool,
     pub input: String,
     pub path: Vec<String>,
     pub extra_column_size: usize,
 }
 
-impl<'a> App<'a> {
+impl<'a> App {
     pub fn new(config: Config) -> Self {
         let mut files = App::list_files(&config.path);
         files.sort_by_key(|f| f.get());
@@ -38,7 +38,7 @@ impl<'a> App<'a> {
     }
 
     fn map_files(path: &str) -> HashMap<FileType, String> {
-        let mut files: Vec<_> = fs::read_dir(path)
+        fs::read_dir(path)
             .unwrap()
             .flat_map(|dir| {
                 if dir.as_ref().unwrap().path().is_dir() {
@@ -50,10 +50,6 @@ impl<'a> App<'a> {
                     vec![dir.unwrap()]
                 }
             })
-            .collect();
-        files.sort_by_key(|dir| dir.path());
-        files
-            .iter()
             .filter_map(|file| {
                 let filename = file.file_name();
                 let filename = filename.to_str().unwrap();
@@ -138,9 +134,7 @@ impl<'a> App<'a> {
             match file {
                 FileType::Song(songname) => {
                     match self.filemap.get(&file) {
-                        Some(value) => {
-                            self.song = Some(Song::from(value.clone(), &self.config.theme))
-                        }
+                        Some(value) => self.song = Some(Song::from(value.clone())),
                         None => {
                             // This is for songs in playlists. If they are transposed, the last
                             // characters will be the new key. This code tries to find a song
@@ -153,17 +147,13 @@ impl<'a> App<'a> {
                                 {
                                     self.song = Some(Song::in_key(
                                         value.clone(),
-                                        &self.config.theme,
                                         PitchClass::from_str(key.get(1).unwrap().as_str()).unwrap(),
                                     ));
                                     return;
                                 }
                             }
                             //TODO: Better handling of missing songs?
-                            self.song = Some(Song::from(
-                                String::from("{t:Song not found}"),
-                                &self.config.theme,
-                            ))
+                            self.song = Some(Song::from(String::from("{t:Song not found}")))
                         }
                     }
                 }

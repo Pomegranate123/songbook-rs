@@ -1,7 +1,6 @@
 extern crate rust_music_theory as rustmt;
 
 use crate::{conf::Theme, util::FileType};
-use itertools::{EitherOrBoth::*, Itertools};
 use lazy_static::lazy_static;
 use regex::{Captures, Regex};
 use rustmt::{interval::Interval, note::PitchClass};
@@ -13,319 +12,271 @@ lazy_static! {
     static ref RE_TAGS: Regex = Regex::new(r"\{([^\{\}\n]+?)(?::([^\{\}\n]+))?\}\n?").unwrap();
     static ref RE_CHORDS: Regex = Regex::new(r"\[([^\n\[\]]*)\]").unwrap();
     static ref RE_ROOT_NOTE: Regex = Regex::new(r"[ABCDEFG][b#]?").unwrap();
+    static ref RE_SPACES: Regex = Regex::new(r" +").unwrap();
+    static ref RE_BLOCKS: Regex = Regex::new(r"[^ \n]+ *").unwrap();
 }
 
-#[derive(Debug, Default, Clone)]
-pub struct SongLine<'a> {
-    pub chords: Option<Spans<'a>>,
-    pub text: Option<Spans<'a>>,
+#[derive(Debug, Clone)]
+pub enum SongString {
+    Chord(String),
+    Text(String),
+    Comment(String),
 }
 
-impl<'a> SongLine<'a> {
-    pub fn from(chords: Spans<'a>, text: Spans<'a>) -> Self {
-        SongLine {
-            chords: Some(chords),
-            text: Some(text),
-        }
-    }
-    pub fn from_text(text: Spans<'a>) -> Self {
-        SongLine {
-            chords: None,
-            text: Some(text),
-        }
+#[derive(Debug, Clone)]
+pub struct SongBlock(Vec<SongString>);
+
+impl SongBlock {
+    pub fn from(input: &str, transposition: i32) -> Self {
+        SongBlock(
+            Song::regex_split_keep(&RE_CHORDS, input)
+                .iter()
+                .map(|part| match RE_CHORDS.captures(&part) {
+                    Some(chord) => {
+                        let chord = chord.get(1).unwrap().as_str();
+                        let transposed = RE_ROOT_NOTE.replace_all(chord, |caps: &Captures| {
+                            PitchClass::from_interval(
+                                PitchClass::from_str(caps.get(0).unwrap().as_str()).unwrap(),
+                                Interval::from_semitone(((transposition + 12) % 12) as u8).unwrap(),
+                            )
+                            .to_string()
+                        });
+                        SongString::Chord(transposed.to_string())
+                    }
+                    None => SongString::Text(part.to_string()),
+                })
+                .collect(),
+        )
     }
 
-    pub fn from_chords(chords: Spans<'a>) -> Self {
-        SongLine {
-            chords: Some(chords),
-            text: None,
-        }
+    pub fn from_comment(c: &str) -> Self {
+        SongBlock(vec![SongString::Comment(c.to_owned())])
     }
 
     pub fn width(&self) -> usize {
-        match (&self.chords, &self.text) {
-            (Some(c), Some(t)) => std::cmp::max(c.width(), t.width()),
-            (Some(c), None) => c.width(),
-            (None, Some(t)) => t.width(),
-            (None, None) => 0,
-        }
-    }
-
-    pub fn height(&self) -> usize {
-        match (&self.chords, &self.text) {
-            (Some(_), Some(_)) => 2,
-            (Some(_), None) => 1,
-            (None, Some(_)) => 1,
-            (None, None) => 0,
-        }
-    }
-
-    pub fn wrap(&self, maxwidth: usize) -> Vec<Self> {
-        match (&self.chords, &self.text) {
-            (Some(c), Some(t)) => {
-                let chordlines = Self::wrap_spans(c, maxwidth);
-                let textlines = Self::wrap_spans(t, maxwidth);
-                chordlines
-                    .into_iter()
-                    .zip_longest(textlines.into_iter())
-                    .map(|pair| match pair {
-                        Both(chords, text) => Self::from(chords, text),
-                        Left(chords) => Self::from_chords(chords),
-                        Right(text) => Self::from_text(text),
-                    })
-                    .collect()
-            }
-            (Some(c), None) => {
-                let chords = Self::wrap_spans(c, maxwidth);
-                chords.into_iter().map(Self::from_chords).collect()
-            }
-            (None, Some(t)) => {
-                let text = Self::wrap_spans(t, maxwidth);
-                text.into_iter().map(Self::from_text).collect()
-            }
-            (None, None) => vec![],
-        }
-    }
-
-    fn wrap_spans(spans: &Spans<'a>, max_width: usize) -> Vec<Spans<'a>> {
-        if max_width >= spans.width() {
-            return vec![spans.clone()];
-        }
-
-        let mut spans = spans.0.iter();
-        let mut span;
-        let mut total_width = 0;
-        let mut wrapped_span = vec![];
-        let mut wrapped_spans = vec![];
-
-        loop {
-            span = match spans.next() {
-                Some(s) => s.clone(),
-                None => break,
-            };
-
-            let mut span_width = span.width();
-
-            if total_width + span_width < max_width {
-                wrapped_span.push(span.clone());
-                total_width += span.width();
-            } else {
-                while total_width + span_width > max_width {
-                    let wrap_index = if span_width < max_width {
-                        max_width
-                    } else {
-                        max_width
-                            // This gets the highest index possible that does not cut off a word or
-                            // chord
-                            - span
-                                .content
-                                .chars()
-                                .rev()
-                                .skip(span_width - max_width)
-                                .take_while(|&c| c != ' ' && c != '-')
-                                .count()
-                    };
-                    let mut content = span.content.chars();
-                    let span_left = Span::styled(
-                        content.by_ref().take(wrap_index).collect::<String>(),
-                        span.style,
-                    );
-                    span = Span::styled(content.collect::<String>(), span.style);
-
-                    wrapped_span.push(span_left);
-                    wrapped_spans.push(Spans::from(wrapped_span.clone()));
-                    wrapped_span = vec![];
-                    total_width = 0;
-                    span_width = span.width();
+        let mut chords: usize = 0;
+        let mut text: usize = 0;
+        self.0.iter().for_each(|songstring| match songstring {
+            SongString::Chord(c) => {
+                match text.cmp(&chords) {
+                    Ordering::Less => text = chords,
+                    Ordering::Greater => chords = text,
+                    Ordering::Equal => (),
                 }
-                wrapped_span = vec![span];
+                chords += c.chars().count() + 1;
             }
-        }
-        wrapped_spans.push(Spans::from(wrapped_span.clone()));
-
-        wrapped_spans
-    }
-
-    pub fn into_spans(self) -> Vec<Spans<'a>> {
-        match (self.chords, self.text) {
-            (Some(c), Some(t)) => vec![c, t],
-            (Some(c), None) => vec![c],
-            (None, Some(t)) => vec![t],
-            (None, None) => vec![],
-        }
+            SongString::Text(t) => {
+                text += t.chars().count();
+            }
+            SongString::Comment(c) => {
+                text += c.chars().count();
+            }
+        });
+        std::cmp::max(chords, text)
     }
 }
 
 #[derive(Debug, Default, Clone)]
-pub struct Song<'a> {
-    pub title: String,
-    pub subtitle: String,
-    pub songstring: String,
-    pub text: Vec<SongLine<'a>>,
+pub struct SongLine {
+    blocks: Vec<SongBlock>,
+    chorus: bool,
 }
 
-impl<'a> Song<'a> {
-    pub fn from(songstring: String, theme: &Theme) -> Self {
-        Song::new(songstring, theme, None)
+impl SongLine {
+    pub fn from(blocks: Vec<SongBlock>, chorus: bool) -> Self {
+        SongLine { blocks, chorus }
     }
 
-    pub fn in_key(songstring: String, theme: &Theme, key: PitchClass) -> Self {
-        Song::new(songstring, theme, Some(key))
+    pub fn width(&self) -> usize {
+        self.format(&Theme::default())
+            .iter()
+            .map(|s| s.width())
+            .max()
+            .unwrap_or(0)
     }
 
-    fn new(songstring: String, theme: &Theme, transpose_to: Option<PitchClass>) -> Self {
+    pub fn height(&self) -> usize {
+        self.format(&Theme::default()).len()
+    }
+
+    pub fn format<'a>(&self, theme: &Theme) -> Vec<Spans<'a>> {
+        let mut has_chords = false;
+        let mut chords: Vec<Span<'a>> = vec![];
+        let mut text: Vec<Span<'a>> = vec![];
+        if self.chorus {
+            chords.push(Span::styled("| ", theme.comment.to_style()));
+            text.push(Span::styled("| ", theme.comment.to_style()));
+        }
+        self.blocks.iter().for_each(|block| {
+            block.0.iter().for_each(|songstring| match songstring {
+                SongString::Chord(c) => {
+                    has_chords = true;
+                    let text_len: usize = text.iter().map(Span::width).sum();
+                    let chords_len: usize = chords.iter().map(Span::width).sum();
+                    match text_len.cmp(&chords_len) {
+                        Ordering::Equal => (),
+                        Ordering::Less => {
+                            let delimiter = match text.iter().last() {
+                                Some(span) => match span.content.chars().last().unwrap_or(' ') {
+                                    ' ' | ',' | '.' | ':' | ';' => " ",
+                                    _ => "-",
+                                },
+                                None => " ",
+                            };
+                            text.push(Span::from(delimiter.repeat(chords_len - text_len)))
+                        }
+                        Ordering::Greater => {
+                            chords.push(Span::from(" ".repeat(text_len - chords_len)))
+                        }
+                    }
+                    chords.push(Span::styled(c.to_owned() + " ", theme.chord.to_style()));
+                }
+                SongString::Text(t) => {
+                    text.push(Span::styled(t.to_owned(), theme.lyrics.to_style()));
+                }
+                SongString::Comment(c) => {
+                    text.push(Span::styled(c.to_owned(), theme.comment.to_style()));
+                }
+            })
+        });
+        let mut formatted = vec![];
+        if has_chords {
+            formatted.push(Spans::from(chords))
+        }
+        formatted.push(Spans::from(text));
+        formatted
+    }
+
+    pub fn wrap(&self, max_width: usize) -> Vec<Self> {
+        if max_width >= self.width() {
+            return vec![self.clone()];
+        }
+        let chorus_width = match self.chorus {
+            true => 2,
+            false => 0,
+        };
+
+        let mut total_width = 0;
+        let mut wrapped_line = vec![];
+        let mut wrapped_lines = vec![];
+
+        for block in self.blocks.iter() {
+            let block_width = block.width();
+
+            if total_width + block_width + chorus_width < max_width {
+                wrapped_line.push(block.clone());
+                total_width += block.width();
+            } else {
+                wrapped_lines.push(SongLine::from(wrapped_line, self.chorus));
+                wrapped_line = vec![block.clone()];
+                total_width = block.width();
+            }
+        }
+        wrapped_lines.push(SongLine::from(wrapped_line, self.chorus));
+
+        wrapped_lines
+    }
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct Song {
+    pub title: String,
+    pub subtitle: String,
+    pub transposition: i32,
+    pub key: Option<PitchClass>,
+    pub content: Vec<SongLine>,
+}
+
+impl Song {
+    pub fn from(songstring: String) -> Self {
+        Song::new(songstring, None)
+    }
+
+    pub fn in_key(songstring: String, key: PitchClass) -> Self {
+        Song::new(songstring, Some(key))
+    }
+
+    fn new(songstring: String, key: Option<PitchClass>) -> Self {
         let songstring = RE_NEWLINES.replace_all(&songstring, "\n");
+        let songstring = RE_SPACES.replace_all(&songstring, " ");
 
         let mut song = Song {
-            songstring: songstring.to_string(),
+            key,
             ..Default::default()
         };
 
         let mut chorus = false;
         let mut comment = false;
-        let mut transposition = 0;
-        'lines: for line in songstring.lines() {
-            let mut chords: Vec<Span<'a>> = vec![];
-            let mut text = vec![];
+        for line in songstring.lines() {
+            let mut tag = false;
+            let mut blocks: Vec<SongBlock> = vec![];
             for section in Song::regex_split_keep(&RE_TAGS, &line) {
                 match RE_TAGS.captures(&section) {
-                    Some(cap) => match cap.get(1).unwrap().as_str() {
-                        "t" | "title" => {
-                            song.title = String::from(cap.get(2).unwrap().as_str().trim());
-                            continue 'lines;
-                        }
-                        "st" | "subtitle" => {
-                            let subtitle = String::from(cap.get(2).unwrap().as_str().trim());
-                            song.subtitle = subtitle.clone();
-                            song.text.push(SongLine::from_text(Spans::from(Span::styled(
-                                subtitle,
-                                theme.title.to_style(),
-                            ))));
-                            continue 'lines;
-                        }
-                        "key" => {
-                            if let Some(key) = transpose_to {
-                                if let Some(song_key) =
-                                    PitchClass::from_str(cap.get(2).unwrap().as_str().trim())
-                                {
-                                    transposition +=
-                                        key.into_u8() as i32 - song_key.into_u8() as i32;
+                    Some(cap) => {
+                        tag = true;
+                        match cap.get(1).unwrap().as_str() {
+                            "t" | "title" => {
+                                song.title = String::from(cap.get(2).unwrap().as_str().trim());
+                            }
+                            "st" | "subtitle" => {
+                                song.subtitle = String::from(cap.get(2).unwrap().as_str().trim());
+                            }
+                            "key" => {
+                                let original_key =
+                                    PitchClass::from_str(cap.get(2).unwrap().as_str().trim());
+                                match song.key {
+                                    Some(display_key) => {
+                                        song.transposition += display_key.into_u8() as i32
+                                            - original_key
+                                                .expect("Error parsing key tag in song")
+                                                .into_u8()
+                                                as i32
+                                    }
+                                    None => song.key = original_key,
                                 }
                             }
-                            continue 'lines;
+                            "Capo-Bass_Guitar" => {
+                                song.transposition -=
+                                    cap.get(2).unwrap().as_str().trim().parse::<i32>().unwrap()
+                            }
+                            "c" => blocks
+                                .append(&mut Song::parse_comment(cap.get(2).unwrap().as_str())),
+                            "soc" | "start_of_chorus" => {
+                                chorus = true;
+                            }
+                            "eoc" | "end_of_chorus" => {
+                                chorus = false;
+                            }
+                            "soh" => comment = true,
+                            "eoh" => comment = false,
+                            _ => (),
                         }
-                        "Capo-Bass_Guitar" => {
-                            transposition -=
-                                cap.get(2).unwrap().as_str().trim().parse::<i32>().unwrap()
-                        }
-                        "c" => text.push(Span::styled(
-                            String::from(cap.get(2).unwrap().as_str()),
-                            theme.comment.to_style(),
-                        )),
-                        "soc" | "start_of_chorus" => {
-                            chorus = true;
-                            continue 'lines;
-                        }
-                        "eoc" | "end_of_chorus" => chorus = false,
-                        "soh" => comment = true,
-                        "eoh" => comment = false,
-                        "tag" | "tag:" => continue 'lines,
-                        _ => {}
-                    },
+                    }
                     None => match comment {
-                        true => text.push(Span::styled(
-                            String::from(section),
-                            theme.comment.to_style(),
-                        )),
-                        false => Song::parse_chords(
-                            &section,
-                            &theme,
-                            &mut chords,
-                            &mut text,
-                            transposition,
-                        ),
+                        true => blocks.append(&mut Song::parse_comment(section)),
+                        false => blocks.append(&mut Song::parse_line(section, song.transposition)),
                     },
                 }
             }
-            if chorus {
-                if !text.is_empty() {
-                    text.insert(
-                        0,
-                        Span::styled(String::from("| "), theme.comment.to_style()),
-                    );
-                }
-                if !chords.is_empty() {
-                    chords.insert(
-                        0,
-                        Span::styled(String::from("| "), theme.comment.to_style()),
-                    );
-                }
-            }
-
-            if !chords.is_empty() {
-                song.text
-                    .push(SongLine::from(Spans::from(chords), Spans::from(text)));
-            } else {
-                song.text.push(SongLine::from_text(Spans::from(text)));
+            if !blocks.is_empty() || !tag {
+                song.content.push(SongLine::from(blocks, chorus));
             }
         }
         song
     }
 
-    fn parse_chords(
-        chord_line: &str,
-        theme: &Theme,
-        chords: &mut Vec<Span<'a>>,
-        spans: &mut Vec<Span<'a>>,
-        transposition: i32,
-    ) {
-        let mut chords_string = String::new();
-        let mut lyrics_string = String::new();
-        let chords_width: i32 = chords.iter().map(|s| s.width() as i32).sum();
-        let lyrics_width: i32 = spans.iter().map(|s| s.width() as i32).sum();
+    fn parse_comment(input: &str) -> Vec<SongBlock> {
+        RE_BLOCKS
+            .captures_iter(input)
+            .map(|cap| SongBlock::from_comment(cap.get(0).unwrap().as_str()))
+            .collect()
+    }
 
-        for part in Song::regex_split_keep(&RE_CHORDS, &chord_line) {
-            match RE_CHORDS.captures(&part) {
-                Some(chord) => {
-                    let difference = (lyrics_width + lyrics_string.chars().count() as i32)
-                        - (chords_width + chords_string.chars().count() as i32);
-                    match difference.cmp(&0) {
-                        Ordering::Less => {
-                            // Chords are longer than lyrics
-                            let delimiter = match lyrics_string.chars().last().unwrap_or(' ') {
-                                ' ' | ',' | '.' | ':' | ';' => " ",
-                                _ => "-",
-                            };
-                            lyrics_string.push_str(&delimiter.repeat(-difference as usize));
-                        }
-                        Ordering::Greater => {
-                            // Lyrics are longer than chords
-                            chords_string.push_str(&" ".repeat(difference as usize));
-                        }
-                        Ordering::Equal => {}
-                    }
-
-                    let chord_tag = chord.get(1).unwrap().as_str();
-
-                    let parsed_chord = RE_ROOT_NOTE.replace_all(chord_tag, |caps: &Captures| {
-                        PitchClass::from_interval(
-                            PitchClass::from_str(&caps.get(0).unwrap().as_str()).unwrap(),
-                            Interval::from_semitone(((transposition + 12) % 12) as u8).unwrap(),
-                        )
-                        .to_string()
-                    });
-                    chords_string.push_str(&parsed_chord);
-                    chords_string.push(' ');
-                }
-                None => lyrics_string.push_str(part),
-            }
-        }
-        if !chords_string.is_empty() {
-            chords.push(Span::styled(chords_string, theme.chord.to_style()));
-        }
-        if !lyrics_string.is_empty() {
-            spans.push(Span::from(lyrics_string));
-        }
+    fn parse_line(input: &str, transposition: i32) -> Vec<SongBlock> {
+        RE_BLOCKS
+            .captures_iter(input)
+            .map(|cap| SongBlock::from(cap.get(0).unwrap().as_str(), transposition))
+            .collect()
     }
 
     fn regex_split_keep<'b>(re: &Regex, text: &'b str) -> Vec<&'b str> {

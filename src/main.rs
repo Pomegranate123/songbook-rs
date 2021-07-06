@@ -7,15 +7,16 @@ mod util;
 
 use crate::{
     app::App,
-    conf::Config,
+    conf::{Config, Theme},
+    parser::Song,
     util::event::{self, Event, Events},
 };
 use getopts::Options;
-use std::{env, error::Error, io, time::Duration};
+use std::{env, error::Error, fs, io, time::Duration};
 use termion::{event::Key, raw::IntoRawMode};
 use tui::{
     backend::TermionBackend,
-    layout::{Constraint, Direction, Layout},
+    layout::{Constraint, Direction, Layout, Rect},
     Terminal,
 };
 
@@ -33,6 +34,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     opts.optopt("c", "config", "set config file", "PATH");
     opts.optopt("", "default-config", "write the default config", "PATH");
     opts.optflag("h", "help", "print this help menu");
+    opts.optflag("d", "debug", "");
 
     let matches = match opts.parse(&args[1..]) {
         Ok(m) => m,
@@ -68,6 +70,18 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
     };
 
+    let mut app = App::new(config.clone());
+
+    if matches.opt_present("d") {
+        let song = Song::from(
+            fs::read_to_string("/home/pomegranate/Dropbox/Songbook/NL Selectie/Opw785.txt")
+                .unwrap(),
+        );
+        let wrapped = ui::wrap_lines(&song.content, Rect::new(0, 0, 50, 50), 15);
+        println!("{:#?}", wrapped.get(0).unwrap().to_spans(&Theme::default()));
+        return Ok(());
+    }
+
     let stdout = io::stdout().into_raw_mode()?;
     let backend = TermionBackend::new(stdout);
 
@@ -76,8 +90,6 @@ fn main() -> Result<(), Box<dyn Error>> {
         exit_key: *config.keybinds.quit,
         tick_rate: Duration::from_millis(250),
     });
-
-    let mut app = App::new(config);
 
     term.clear().unwrap();
     loop {
@@ -90,9 +102,6 @@ fn main() -> Result<(), Box<dyn Error>> {
 
             ui::draw_search_list(f, &mut app, layout[0]);
             ui::draw_song_block(f, &app, layout[1]);
-            //            ui::draw_test(f, &mut app, Rect::new(0, 0, 20, 50));
-            //            ui::draw_test(f, &mut app, Rect::new(20, 0, 40, 50));
-            //            ui::draw_test(f, &mut app, Rect::new(60, 0, 80, 50));
         })?;
 
         match events.next()? {

@@ -15,6 +15,10 @@ theme:
     fg: Blue
     bg: ~
     modifiers: []
+  lyrics:
+    fg: ~
+    bg: ~
+    modifiers: []
   selected:
     fg: Green
     bg: ~

@@ -8,7 +8,7 @@ use serde::{
 use termion::event::Key;
 use tui::style::{Color, Modifier, Style};
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Config {
     pub path: String,
     pub theme: Theme,
@@ -52,11 +52,12 @@ impl Config {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Theme {
     pub title: ConfStyle,
     pub comment: ConfStyle,
     pub chord: ConfStyle,
+    pub lyrics: ConfStyle,
     pub selected: ConfStyle,
 }
 
@@ -70,6 +71,7 @@ impl Default for Theme {
                 .fg(Color::Red)
                 .add_modifier(Modifier::BOLD),
             chord: ConfStyle::default().fg(Color::Blue),
+            lyrics: ConfStyle::default(),
             selected: ConfStyle::default()
                 .fg(Color::Green)
                 .add_modifier(Modifier::BOLD),
@@ -77,7 +79,7 @@ impl Default for Theme {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Keybinds {
     pub up: SerDeKey,
     pub down: SerDeKey,
@@ -109,7 +111,7 @@ impl Default for Keybinds {
 }
 
 /// Style replacement which uses SerDeModifier in order to be readable when serialized
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct ConfStyle {
     pub fg: Option<Color>,
     pub bg: Option<Color>,
@@ -156,6 +158,7 @@ impl Default for ConfStyle {
 }
 
 /// Termion key wrapper that has serialize and deserialize
+#[derive(Clone)]
 pub struct SerDeKey(Key);
 
 impl std::ops::Deref for SerDeKey {
@@ -257,6 +260,7 @@ impl<'de> Visitor<'de> for KeyVisitor {
 }
 
 /// Tui Modifier wrapper that has readable serialize and deserialize
+#[derive(Clone)]
 pub struct SerDeModifier(Modifier);
 
 impl std::ops::Deref for SerDeModifier {
