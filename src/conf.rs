@@ -1,18 +1,18 @@
-#![allow(dead_code)]
-
 use serde::{
     de::{Deserializer, Visitor},
     ser::Serializer,
     Deserialize, Serialize,
 };
+use std::path::PathBuf;
 use termion::event::Key;
 use tui::style::{Color, Modifier, Style};
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Config {
-    pub path: String,
+    pub path: PathBuf,
     pub theme: Theme,
     pub keybinds: Keybinds,
+    pub icons: Icons,
     pub auto_select_song: bool,
     pub extra_column_size: usize,
     pub column_padding: usize,
@@ -21,9 +21,10 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Config {
-            path: String::from("."),
+            path: PathBuf::from("."),
             theme: Theme::default(),
             keybinds: Keybinds::default(),
+            icons: Icons::default(),
             auto_select_song: false,
             extra_column_size: 15,
             column_padding: 2,
@@ -59,6 +60,9 @@ pub struct Theme {
     pub chord: ConfStyle,
     pub lyrics: ConfStyle,
     pub selected: ConfStyle,
+    pub folder: ConfStyle,
+    pub song: ConfStyle,
+    pub playlist: ConfStyle,
 }
 
 impl Default for Theme {
@@ -75,6 +79,9 @@ impl Default for Theme {
             selected: ConfStyle::default()
                 .fg(Color::Green)
                 .add_modifier(Modifier::BOLD),
+            folder: ConfStyle::default().fg(Color::Yellow),
+            song: ConfStyle::default(),
+            playlist: ConfStyle::default().fg(Color::Cyan),
         }
     }
 }
@@ -110,6 +117,23 @@ impl Default for Keybinds {
     }
 }
 
+#[derive(Clone, Serialize, Deserialize)]
+pub struct Icons {
+    pub folder: String,
+    pub playlist: String,
+    pub song: String,
+}
+
+impl Default for Icons {
+    fn default() -> Self {
+        Icons {
+            folder: " ".to_string(),
+            playlist: "蘿".to_string(),
+            song: " ".to_string(),
+        }
+    }
+}
+
 /// Style replacement which uses SerDeModifier in order to be readable when serialized
 #[derive(Clone, Serialize, Deserialize)]
 pub struct ConfStyle {
@@ -124,6 +148,7 @@ impl ConfStyle {
         self
     }
 
+    #[allow(dead_code)]
     pub fn bg(mut self, bg: Color) -> Self {
         self.bg = Some(bg);
         self

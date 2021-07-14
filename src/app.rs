@@ -1,191 +1,292 @@
 use crate::{
     conf::Config,
     parser::{Playlist, Song},
-    util::{FileType, StatefulList},
 };
-use lazy_static::lazy_static;
-use regex::Regex;
-use rust_music_theory::note::PitchClass;
-use std::{collections::HashMap, fs};
-
-lazy_static! {
-    static ref RE_SONG_TRANSPOSITION: Regex = Regex::new(r" \[([ABCDEFG][b#]?)\]").unwrap();
-}
+use std::{
+    collections::HashMap,
+    fs::{self, DirEntry},
+    path::{Path, PathBuf},
+};
+use tui::widgets::ListState;
 
 #[derive(Default)]
 pub struct App {
-    pub files: StatefulList,
-    pub filemap: HashMap<FileType, String>,
+    files: HashMap<FileType, String>,
+    pub file_nav: FileNavigator,
+    pub search_nav: FileNavigator,
     pub config: Config,
     pub song: Option<Song>,
     pub searching: bool,
     pub input: String,
     pub path: Vec<String>,
-    pub extra_column_size: usize,
+    pub transposing: bool,
 }
 
 impl<'a> App {
     pub fn new(config: Config) -> Self {
-        let mut files = App::list_files(&config.path);
-        files.sort_by_key(|f| f.get());
+        let files = App::create_filemap(&config.path);
+        let mut all_files: Vec<FileType> = files.keys().cloned().collect();
+        all_files.sort_by_key(FileType::name);
         App {
-            files: StatefulList::with_items(files),
-            filemap: App::map_files(&config.path),
-            extra_column_size: config.extra_column_size,
+            file_nav: FileNavigator::from_path(&config.path),
+            search_nav: FileNavigator(vec![Folder {
+                name: String::from("Search"),
+                files: all_files,
+                state: ListState::default(),
+            }]),
+            files,
             config,
             ..Default::default()
         }
     }
 
-    fn map_files(path: &str) -> HashMap<FileType, String> {
-        fs::read_dir(path)
-            .unwrap()
-            .flat_map(|dir| {
-                if dir.as_ref().unwrap().path().is_dir() {
-                    fs::read_dir(dir.unwrap().path())
-                        .unwrap()
-                        .map(|dir| dir.unwrap())
-                        .collect()
-                } else {
-                    vec![dir.unwrap()]
-                }
-            })
-            .filter_map(|file| {
-                let filename = file.file_name();
-                let filename = filename.to_str().unwrap();
-                if file.path().is_dir() {
-                    Some((
-                        FileType::Folder(filename.to_owned()),
-                        file.path().to_str().unwrap().to_owned(),
-                    ))
-                } else if filename.ends_with(".txt") {
-                    let filestring = fs::read_to_string(file.path()).unwrap();
-                    Some((FileType::Song(Song::get_name(&filestring)), filestring))
-                } else if filename.ends_with(".lst") {
-                    let filestring = fs::read_to_string(file.path()).unwrap();
-                    Some((
-                        FileType::Playlist(filename.trim_end_matches(".lst").to_owned()),
-                        filestring,
-                    ))
-                } else {
-                    None
-                }
-            })
-            .collect()
-    }
-
-    fn list_files(path: &str) -> Vec<FileType> {
-        let mut files: Vec<_> = fs::read_dir(path)
-            .unwrap_or_else(|_| panic!("Path {} not found.", path))
-            .map(|dir| dir.unwrap())
-            .collect();
-        files.sort_by_key(|dir| dir.path());
-        files
-            .iter()
-            .filter_map(|file| {
-                let filename = file.file_name();
-                let filename = filename.to_str().unwrap();
-                if file.path().is_dir() {
-                    Some(FileType::Folder(filename.to_owned()))
-                } else if filename.ends_with(".txt") {
-                    Some(FileType::Song(Song::get_name(
-                        &fs::read_to_string(file.path()).unwrap(),
-                    )))
-                } else if filename.ends_with(".lst") {
-                    Some(FileType::Playlist(String::from(
-                        filename.trim_end_matches(".lst"),
-                    )))
-                } else {
-                    None
-                }
-            })
-            .collect()
-    }
-
-    pub fn current_path(&self) -> String {
-        self.config.path.clone()
-            + &self
-                .path
-                .iter()
-                .map(|f| f.to_owned())
-                .intersperse_with(|| String::from("/"))
-                .collect::<String>()
-    }
-
-    pub fn path_forward(&mut self, folder: &str) {
-        self.path.push(folder.to_string());
-        self.update_path();
-    }
-
-    pub fn path_back(&mut self) {
-        self.path.pop();
-        self.update_path();
-    }
-
-    fn update_path(&mut self) {
-        let path = self.current_path();
-        self.files.items = App::list_files(&path);
-        self.input = String::new();
-        self.files.select(None);
-    }
-
     pub fn load_selected(&mut self) {
-        if let Some(file) = self.files.get_selected_item() {
+        let file = self.get_nav().selected().cloned();
+        if let Some(file) = file {
             match file {
-                FileType::Song(songname) => {
-                    match self.filemap.get(&file) {
-                        Some(value) => self.song = Some(Song::from(value.clone())),
-                        None => {
-                            // This is for songs in playlists. If they are transposed, the last
-                            // characters will be the new key. This code tries to find a song
-                            // without those characters, and if it finds it, it loads it in the new
-                            // key.
-                            if let Some(key) = RE_SONG_TRANSPOSITION.captures(songname) {
-                                let actual_name = RE_SONG_TRANSPOSITION.replace(songname, "");
-                                if let Some(value) =
-                                    self.filemap.get(&FileType::Song(actual_name.to_string()))
-                                {
-                                    self.song = Some(Song::in_key(
-                                        value.clone(),
-                                        PitchClass::from_str(key.get(1).unwrap().as_str()).unwrap(),
-                                    ));
-                                    return;
-                                }
-                            }
-                            //TODO: Better handling of missing songs?
-                            self.song = Some(Song::from(String::from("{t:Song not found}")))
-                        }
-                    }
+                FileType::Folder(path) => self.get_nav_mut().open_path(&path),
+                FileType::Song(_) => {
+                    self.song = Some(Song::from(
+                        self.files
+                            .get(&file)
+                            .unwrap_or(&String::from("{title:Song not found}"))
+                            .clone(),
+                    ))
                 }
-
                 FileType::Playlist(_) => {
-                    if let Some(playlist) = self.filemap.get(file) {
-                        let playlist = Playlist::from(playlist.clone());
-                        self.files.items = playlist.songs;
-                    }
-                    self.files.select(None);
+                    let playlist = Playlist::from(self.files.get(&file).unwrap());
+                    self.get_nav_mut().open_playlist(playlist)
                 }
-                FileType::Folder(path) => self.path_forward(&path.to_string()),
             }
         }
     }
 
-    pub fn search(&self, query: &str) -> Vec<FileType> {
-        let mut results: Vec<FileType>;
-        results = self
-            .filemap
+    pub fn load_selected_song(&mut self) {
+        if let Some(FileType::Song(_)) = self.get_nav().selected() {
+            self.load_selected()
+        }
+    }
+
+    pub fn search(&mut self) {
+        let input = &self.input.to_lowercase();
+        let mut results: Vec<FileType> = self
+            .files
             .iter()
             .filter_map(|(k, v)| {
-                if k.get().to_lowercase().contains(&query.to_lowercase())
-                    | v.to_lowercase().contains(&query.to_lowercase())
-                {
+                if k.name().to_lowercase().contains(input) | v.to_lowercase().contains(input) {
                     Some(k.clone())
                 } else {
                     None
                 }
             })
             .collect();
-        results.sort_by_key(|f| f.get());
-        results
+        results.sort_by_key(FileType::name);
+        self.get_nav_mut().0 = vec![Folder {
+            name: String::from("Search"),
+            files: results,
+            state: ListState::default(),
+        }];
+    }
+
+    fn create_filemap(path: &Path) -> HashMap<FileType, String> {
+        App::get_direntries(path)
+            .iter()
+            .filter_map(|file| {
+                let path = file.path();
+                if path.is_dir() {
+                    Some((FileType::Folder(path), String::new()))
+                } else {
+                    let extension = path.extension().unwrap().to_str().unwrap();
+                    if extension == "txt" {
+                        let filestring = fs::read_to_string(file.path()).unwrap();
+                        Some((FileType::Song(Song::get_name(&filestring)), filestring))
+                    } else if extension == "lst" {
+                        let filestring = fs::read_to_string(file.path()).unwrap();
+                        Some((
+                            FileType::Playlist(Playlist::get_name(&filestring)),
+                            filestring,
+                        ))
+                    } else {
+                        None
+                    }
+                }
+            })
+            .collect()
+    }
+
+    // Gets all DirEntry's that are not a folder
+    fn get_direntries(path: &Path) -> Vec<DirEntry> {
+        fs::read_dir(path)
+            .unwrap()
+            .flat_map(|dir| {
+                let dir = dir.unwrap();
+                let path = dir.path();
+                if path.is_dir() {
+                    let mut dirs = App::get_direntries(&path);
+                    dirs.push(dir);
+                    dirs
+                } else {
+                    vec![dir]
+                }
+            })
+            .collect()
+    }
+
+    pub fn get_nav(&self) -> &FileNavigator {
+        if self.searching {
+            &self.search_nav
+        } else {
+            &self.file_nav
+        }
+    }
+
+    pub fn get_nav_mut(&mut self) -> &mut FileNavigator {
+        if self.searching {
+            &mut self.search_nav
+        } else {
+            &mut self.file_nav
+        }
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, Hash)]
+pub enum FileType {
+    Folder(PathBuf),
+    Song(String),
+    Playlist(String),
+}
+
+impl FileType {
+    pub fn from_dir_entry(entry: DirEntry) -> Result<FileType, &'static str> {
+        let path = entry.path();
+        let name = path.file_name().unwrap().to_str().unwrap();
+        if path.is_dir() {
+            Ok(FileType::Folder(path))
+        } else if name.ends_with(".txt") {
+            Ok(FileType::Song(Song::get_name(
+                &fs::read_to_string(path).unwrap(),
+            )))
+        } else if name.ends_with(".lst") {
+            Ok(FileType::Playlist(Playlist::get_name(
+                &fs::read_to_string(path).unwrap(),
+            )))
+        } else {
+            Err("Unable to parse DirEntry to File")
+        }
+    }
+
+    pub fn name(&self) -> String {
+        match self {
+            FileType::Folder(path) => path.file_name().unwrap().to_str().unwrap().to_owned(),
+            FileType::Song(name) => name.to_owned(),
+            FileType::Playlist(name) => name.to_owned(),
+        }
+    }
+}
+
+#[derive(Default)]
+pub struct Folder {
+    pub name: String,
+    pub state: ListState,
+    pub files: Vec<FileType>,
+}
+
+impl Folder {
+    fn from_path(path: &Path) -> Folder {
+        let name = path.file_name().unwrap().to_str().unwrap().to_string();
+        let mut files: Vec<FileType> = fs::read_dir(path)
+            .unwrap()
+            .filter_map(|dir| FileType::from_dir_entry(dir.unwrap()).ok())
+            .collect();
+        files.sort_by_key(FileType::name);
+        Folder {
+            name,
+            files,
+            ..Default::default()
+        }
+    }
+
+    fn from_playlist(playlist: Playlist) -> Folder {
+        Folder {
+            name: playlist.title,
+            files: playlist.songs,
+            ..Default::default()
+        }
+    }
+
+    fn forward(&mut self, amount: usize) {
+        self.state.select(Some(match self.state.selected() {
+            Some(mut i) => {
+                i += amount;
+                if i > self.files.len() - 1 {
+                    i -= self.files.len();
+                }
+                i
+            }
+            None => 0,
+        }))
+    }
+
+    fn back(&mut self, amount: usize) {
+        self.state.select(Some(match self.state.selected() {
+            Some(mut i) => {
+                if amount > i {
+                    i += self.files.len()
+                }
+                i -= amount;
+                i
+            }
+            None => 0,
+        }))
+    }
+
+    fn selected(&self) -> Option<&FileType> {
+        if let Some(index) = self.state.selected() {
+            return Some(&self.files[index]);
+        }
+        None
+    }
+}
+
+#[derive(Default)]
+pub struct FileNavigator(Vec<Folder>);
+
+impl FileNavigator {
+    fn from_path(path: &Path) -> FileNavigator {
+        FileNavigator(vec![Folder::from_path(path)])
+    }
+
+    fn open_playlist(&mut self, playlist: Playlist) {
+        self.0.push(Folder::from_playlist(playlist));
+    }
+
+    fn open_path(&mut self, path: &Path) {
+        self.0.push(Folder::from_path(path))
+    }
+
+    pub fn path_back(&mut self) {
+        if self.0.len() > 1 {
+            self.0.pop();
+        }
+    }
+
+    pub fn current(&self) -> &Folder {
+        self.0.last().unwrap()
+    }
+
+    pub fn current_mut(&mut self) -> &mut Folder {
+        self.0.iter_mut().last().unwrap()
+    }
+
+    pub fn forward(&mut self, amount: usize) {
+        self.current_mut().forward(amount)
+    }
+
+    pub fn back(&mut self, amount: usize) {
+        self.current_mut().back(amount)
+    }
+
+    fn selected(&self) -> Option<&FileType> {
+        self.current().selected()
     }
 }

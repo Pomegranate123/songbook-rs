@@ -24,6 +24,18 @@ theme:
     bg: ~
     modifiers:
       - Bold
+  folder:
+    fg: Yellow
+    bg: ~
+    modifiers: []
+  song:
+    fg: ~
+    bg: ~
+    modifiers: []
+  playlist:
+    fg: Cyan
+    bg: ~
+    modifiers: []
 keybinds:
   up: Up
   down: Down
@@ -35,6 +47,10 @@ keybinds:
   col_size_dec: Home
   search: /
   quit: Ctrl+c
+icons:
+  folder: " "
+  playlist: "蘿"
+  song: " "
 auto_select_song: false
 extra_column_size: 15
 column_padding: 4

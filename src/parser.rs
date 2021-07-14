@@ -1,6 +1,6 @@
 extern crate rust_music_theory as rustmt;
 
-use crate::{conf::Theme, util::FileType};
+use crate::{app::FileType, conf::Theme};
 use lazy_static::lazy_static;
 use regex::{Captures, Regex};
 use rustmt::{interval::Interval, note::PitchClass};
@@ -10,10 +10,14 @@ use tui::text::{Span, Spans};
 lazy_static! {
     static ref RE_NEWLINES: Regex = Regex::new(r"(\n\r?|\r\n?)").unwrap();
     static ref RE_TAGS: Regex = Regex::new(r"\{([^\{\}\n]+?)(?::([^\{\}\n]+))?\}\n?").unwrap();
+    static ref RE_TITLE: Regex = Regex::new(r"\{(?:title|t)(?::([^\{\}\n]+))?\}\n?").unwrap();
+    static ref RE_SUBTITLE: Regex =
+        Regex::new(r"\{(?:subtitle|st)(?::([^\{\}\n]+))?\}\n?").unwrap();
     static ref RE_CHORDS: Regex = Regex::new(r"\[([^\n\[\]]*)\]").unwrap();
     static ref RE_ROOT_NOTE: Regex = Regex::new(r"[ABCDEFG][b#]?").unwrap();
     static ref RE_SPACES: Regex = Regex::new(r" +").unwrap();
     static ref RE_BLOCKS: Regex = Regex::new(r"[^ \n]+ *").unwrap();
+    static ref RE_SONG_TRANSPOSITION: Regex = Regex::new(r" \[([ABCDEFG][b#]?)\]").unwrap();
 }
 
 #[derive(Debug, Clone)]
@@ -34,7 +38,7 @@ impl SongBlock {
                 .map(|part| match RE_CHORDS.captures(&part) {
                     Some(chord) => {
                         let chord = chord.get(1).unwrap().as_str();
-                        let transposed = RE_ROOT_NOTE.replace_all(chord, |caps: &Captures| {
+                        let transposed = RE_ROOT_NOTE.replace(chord, |caps: &Captures| {
                             PitchClass::from_interval(
                                 PitchClass::from_str(caps.get(0).unwrap().as_str()).unwrap(),
                                 Interval::from_semitone(((transposition + 12) % 12) as u8).unwrap(),
@@ -196,6 +200,52 @@ impl Song {
         Song::new(songstring, Some(key))
     }
 
+    pub fn change_key(song: &mut Song, key: PitchClass) {
+        let old_key = song.key.unwrap();
+        let transposition = old_key.into_u8() as i32 - key.into_u8() as i32;
+        song.content = song
+            .content
+            .iter()
+            .map(|line| {
+                SongLine::from(
+                    line.blocks
+                        .iter()
+                        .map(|block| {
+                            SongBlock(
+                                block
+                                    .0
+                                    .iter()
+                                    .map(|string| match string {
+                                        SongString::Chord(chord) => {
+                                            let transposed =
+                                                RE_ROOT_NOTE.replace(&chord, |caps: &Captures| {
+                                                    PitchClass::from_interval(
+                                                        PitchClass::from_str(
+                                                            caps.get(0).unwrap().as_str(),
+                                                        )
+                                                        .unwrap(),
+                                                        Interval::from_semitone(
+                                                            ((transposition + 12) % 12) as u8,
+                                                        )
+                                                        .unwrap(),
+                                                    )
+                                                    .to_string()
+                                                });
+                                            SongString::Chord(transposed.to_string())
+                                        }
+                                        s => s.clone(), //TODO: remove .clone() call?
+                                    })
+                                    .collect(),
+                            )
+                        })
+                        .collect(),
+                    line.chorus,
+                )
+            })
+            .collect();
+        song.key = Some(key);
+    }
+
     fn new(songstring: String, key: Option<PitchClass>) -> Self {
         let songstring = RE_NEWLINES.replace_all(&songstring, "\n");
         let songstring = RE_SPACES.replace_all(&songstring, " ");
@@ -296,43 +346,37 @@ impl Song {
     }
 
     pub fn get_name(songstring: &str) -> String {
-        let songstring = RE_NEWLINES.replace_all(songstring, "\n");
-        let mut title = String::from("Untitled");
-        let mut subtitle = String::new();
+        let songstring = RE_SPACES.replace_all(songstring, " ");
+        let title = match RE_TITLE.captures(&songstring) {
+            Some(cap) => cap.get(1).unwrap().as_str().trim().to_owned(),
+            None => String::from("Untitled"),
+        };
+        let subtitle = match RE_SUBTITLE.captures(&songstring) {
+            Some(cap) => String::from(" - ") + cap.get(1).unwrap().as_str().trim(),
+            None => String::new(),
+        };
 
-        for line in songstring.lines() {
-            for section in Song::regex_split_keep(&RE_TAGS, &line) {
-                if let Some(cap) = RE_TAGS.captures(&section) {
-                    match cap.get(1).unwrap().as_str() {
-                        "t" | "title" => title = String::from(cap.get(2).unwrap().as_str().trim()),
-                        "st" | "subtitle" => {
-                            subtitle = String::from(cap.get(2).unwrap().as_str().trim())
-                        }
-                        _ => {}
-                    }
-                }
-            }
-        }
-        if subtitle.is_empty() {
-            return title;
-        }
-        format!("{} - {}", title, subtitle)
+        let title = title + &subtitle;
+        RE_SPACES.replace_all(&title, " ").to_string()
     }
 }
 
 pub struct Playlist {
     pub title: String,
     pub songs: Vec<FileType>,
-    pub playliststring: String,
 }
 
 impl Playlist {
-    pub fn from(playliststring: String) -> Self {
+    pub fn from(playliststring: &str) -> Self {
+        let playliststring = RE_SPACES.replace_all(&playliststring, " ").to_string();
         let mut lines = playliststring.lines();
         Playlist {
             title: lines.next().unwrap().to_string(),
             songs: lines.map(|s| FileType::Song(s.to_string())).collect(),
-            playliststring,
         }
+    }
+
+    pub fn get_name(playliststring: &str) -> String {
+        playliststring.lines().next().unwrap().to_string()
     }
 }

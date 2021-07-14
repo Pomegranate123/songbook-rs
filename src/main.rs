@@ -1,4 +1,3 @@
-#![feature(iter_intersperse)]
 mod app;
 mod conf;
 mod parser;
@@ -7,16 +6,15 @@ mod util;
 
 use crate::{
     app::App,
-    conf::{Config, Theme},
-    parser::Song,
-    util::event::{self, Event, Events},
+    conf::Config,
+    util::{Event, Events},
 };
 use getopts::Options;
-use std::{env, error::Error, fs, io, time::Duration};
+use std::{env, error::Error, io, time::Duration};
 use termion::{event::Key, raw::IntoRawMode};
 use tui::{
     backend::TermionBackend,
-    layout::{Constraint, Direction, Layout, Rect},
+    layout::{Constraint, Direction, Layout},
     Terminal,
 };
 
@@ -73,12 +71,6 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut app = App::new(config.clone());
 
     if matches.opt_present("d") {
-        let song = Song::from(
-            fs::read_to_string("/home/pomegranate/Dropbox/Songbook/NL Selectie/Opw785.txt")
-                .unwrap(),
-        );
-        let wrapped = ui::wrap_lines(&song.content, Rect::new(0, 0, 50, 50), 15);
-        println!("{:#?}", wrapped.get(0).unwrap().to_spans(&Theme::default()));
         return Ok(());
     }
 
@@ -86,7 +78,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let backend = TermionBackend::new(stdout);
 
     let mut term = Terminal::new(backend)?;
-    let events = Events::with_config(event::Config {
+    let events = Events::with_config(util::Config {
         exit_key: *config.keybinds.quit,
         tick_rate: Duration::from_millis(250),
     });
@@ -100,64 +92,76 @@ fn main() -> Result<(), Box<dyn Error>> {
                 .constraints([Constraint::Length(20), Constraint::Min(80)].as_ref())
                 .split(f.size());
 
-            ui::draw_search_list(f, &mut app, layout[0]);
-            ui::draw_song_block(f, &app, layout[1]);
+            let left_bar = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([Constraint::Max(100), Constraint::Length(3)])
+                .split(layout[0]);
+
+            if app.searching {
+                ui::draw_song_list(f, &mut app, left_bar[0]);
+                ui::draw_search_bar(f, &mut app, left_bar[1]);
+            } else {
+                ui::draw_song_list(f, &mut app, layout[0]);
+            }
+            ui::draw_song(f, &app, layout[1]);
+            if app.transposing {
+                ui::draw_transposition(f, &mut app, left_bar[1])
+            }
         })?;
 
         match events.next()? {
             Event::Input(key) => {
-                if app.searching {
-                    match key {
-                        Key::Char(c) => match c {
-                            '\n' => (),
-                            _ => {
-                                app.input.push(c);
-                                app.files.items = app.search(&app.input);
-                                app.files.select(None);
-                            }
-                        },
-                        Key::Backspace => {
-                            app.input.pop();
-                            app.files.items = app.search(&app.input);
-                        }
-                        Key::Esc => app.searching = false,
-                        _ => (),
-                    }
-                } else if key == *app.config.keybinds.down {
-                    app.files.forward(1);
+                if key == *app.config.keybinds.down {
+                    app.get_nav_mut().forward(1);
                     if app.config.auto_select_song {
-                        app.load_selected()
+                        app.load_selected_song()
                     }
                 } else if key == *app.config.keybinds.up {
-                    app.files.back(1);
+                    app.get_nav_mut().back(1);
                     if app.config.auto_select_song {
-                        app.load_selected()
+                        app.load_selected_song()
                     }
                 } else if key == *app.config.keybinds.jump_down {
-                    app.files.forward(20);
+                    app.get_nav_mut().forward(20);
                     if app.config.auto_select_song {
-                        app.load_selected()
+                        app.load_selected_song()
                     }
                 } else if key == *app.config.keybinds.jump_up {
-                    app.files.back(20);
+                    app.get_nav_mut().back(20);
                     if app.config.auto_select_song {
-                        app.load_selected()
+                        app.load_selected_song()
                     }
                 } else if key == *app.config.keybinds.next {
                     app.load_selected()
                 } else if key == *app.config.keybinds.back {
-                    app.path_back()
+                    app.get_nav_mut().path_back()
                 } else if key == *app.config.keybinds.col_size_inc {
-                    app.extra_column_size += 1;
+                    app.config.extra_column_size += 1;
                 } else if key == *app.config.keybinds.col_size_dec {
-                    if app.extra_column_size > 0 {
-                        app.extra_column_size -= 1;
+                    if app.config.extra_column_size > 0 {
+                        app.config.extra_column_size -= 1;
                     }
                 } else if key == *app.config.keybinds.search {
                     app.searching = true
                 } else if key == *app.config.keybinds.quit {
                     break;
-                };
+                } else if app.searching {
+                    match key {
+                        Key::Char(c) => match c {
+                            '\n' => (),
+                            _ => {
+                                app.input.push(c);
+                                app.search();
+                            }
+                        },
+                        Key::Backspace => {
+                            app.input.pop();
+                            app.search();
+                        }
+                        Key::Esc => app.searching = false,
+                        _ => (),
+                    }
+                }
             }
             Event::Tick => (),
         }

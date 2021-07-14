@@ -1,4 +1,8 @@
-use crate::{app::App, conf::Theme, parser::*};
+use crate::{
+    app::{App, FileType},
+    conf::Theme,
+    parser::*,
+};
 use tui::{
     backend::Backend,
     layout::{Constraint, Direction, Layout, Rect},
@@ -8,36 +12,61 @@ use tui::{
     Frame,
 };
 
-pub fn draw_search_list<B>(f: &mut Frame<B>, app: &mut App, layout_chunk: Rect)
+pub fn draw_song_list<B>(f: &mut Frame<B>, app: &mut App, layout_chunk: Rect)
 where
     B: Backend,
 {
-    let layout = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([Constraint::Max(100), Constraint::Length(3)])
-        .split(layout_chunk);
-
     // Format search results into Vec<ListItem>
     let searchresults: Vec<ListItem> = app
+        .get_nav()
+        .current()
         .files
-        .items
         .iter()
-        .map(|s| ListItem::new(s.get()))
+        .map(|file| {
+            ListItem::new(Spans::from(match file {
+                FileType::Folder(_) => Span::styled(
+                    app.config.icons.folder.clone() + &file.name(),
+                    app.config.theme.folder.to_style(),
+                ),
+                FileType::Song(_) => Span::styled(
+                    app.config.icons.song.clone() + &file.name(),
+                    app.config.theme.song.to_style(),
+                ),
+                FileType::Playlist(_) => Span::styled(
+                    app.config.icons.playlist.clone() + &file.name(),
+                    app.config.theme.playlist.to_style(),
+                ),
+            }))
+        })
         .collect();
 
     // Create song list
     let songlist = List::new(searchresults)
-        .block(Block::default().title("Songs").borders(Borders::ALL))
+        .block(
+            Block::default()
+                .title(app.get_nav().current().name.clone())
+                .borders(Borders::ALL),
+        )
         .highlight_style(Style::default().bg(Color::DarkGray));
 
-    f.render_stateful_widget(songlist, layout[0], &mut app.files.state);
+    f.render_stateful_widget(
+        songlist,
+        layout_chunk,
+        &mut app.get_nav_mut().current_mut().state,
+    );
+}
 
+pub fn draw_search_bar<B>(f: &mut Frame<B>, app: &mut App, layout_chunk: Rect)
+where
+    B: Backend,
+{
     // Only show last characters that fit in search box
-    let inner_size = (layout[1].width - 3) as usize; // Two border pixels, one cursor pixel
-    let input_length = app.input.chars().count();
-    let mut inputtext = &app.input[..];
+    let inner_size = (layout_chunk.width - 3) as usize; // Two border pixels, one cursor pixel
+    let input = &app.input;
+    let input_length = input.chars().count();
+    let mut inputtext = &input[..];
     if input_length >= inner_size {
-        inputtext = &app.input[input_length - inner_size..];
+        inputtext = &input[input_length - inner_size..];
     }
 
     // Add cursor if search box is selected
@@ -58,10 +87,23 @@ where
             .title(Span::from("Search")),
     );
 
-    f.render_widget(searchbox, layout[1]);
+    f.render_widget(searchbox, layout_chunk);
 }
 
-pub fn draw_song_block<B>(f: &mut Frame<B>, app: &App, layout_chunk: Rect)
+pub fn draw_transposition<B>(_f: &mut Frame<B>, _app: &mut App, _layout_chunk: Rect)
+where
+    B: Backend,
+{
+    todo!()
+    //    match &app.song {
+    //        Some(song) => {
+    //            let key_block = List::new()
+    //        }
+    //        None => (),
+    //    }
+}
+
+pub fn draw_song<B>(f: &mut Frame<B>, app: &App, layout_chunk: Rect)
 where
     B: Backend,
 {
@@ -69,13 +111,13 @@ where
         Some(song) => {
             let song_block = Block::default()
                 .title(Span::styled(
-                    song.title.as_str(),
+                    format!("{} - {}", song.title.as_str(), song.subtitle.as_str()),
                     app.config.theme.title.to_style(),
                 ))
                 .borders(Borders::ALL);
 
             let song_rect = song_block.inner(layout_chunk);
-            let text = wrap_lines(&song.content, song_rect, app.extra_column_size);
+            let text = wrap_lines(&song.content, song_rect, app.config.extra_column_size);
 
             let constraints: Vec<Constraint> = text
                 .iter()
@@ -131,6 +173,9 @@ impl<'a> Column {
 
 pub fn wrap_lines(lines: &[SongLine], container: Rect, extra_column_size: usize) -> Vec<Column> {
     let height = (container.height - 2) as usize;
+    if lines.is_empty() {
+        return vec![];
+    }
 
     let mut line_widths: Vec<usize> = lines.iter().map(|line| line.width()).collect();
     line_widths.sort_unstable();
