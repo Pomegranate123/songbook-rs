@@ -97,6 +97,7 @@ pub struct Keybinds {
     pub col_size_inc: SerDeKey,
     pub col_size_dec: SerDeKey,
     pub search: SerDeKey,
+    pub transpose: SerDeKey,
     pub quit: SerDeKey,
 }
 
@@ -112,6 +113,7 @@ impl Default for Keybinds {
             col_size_inc: SerDeKey(Key::End),
             col_size_dec: SerDeKey(Key::Home),
             search: SerDeKey(Key::Char('/')),
+            transpose: SerDeKey(Key::Char('t')),
             quit: SerDeKey(Key::Ctrl('c')),
         }
     }

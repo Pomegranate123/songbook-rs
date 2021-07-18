@@ -16,17 +16,29 @@ lazy_static! {
     static ref RE_SONG_TRANSPOSITION: Regex = Regex::new(r" \[([ABCDEFG][b#]?)\]").unwrap();
 }
 
+#[derive(PartialEq)]
+pub enum AppState {
+    Default,
+    Searching,
+    Transposing,
+}
+
+impl Default for AppState {
+    fn default() -> AppState {
+        AppState::Default
+    }
+}
+
 #[derive(Default)]
 pub struct App {
     files: HashMap<FileType, String>,
     pub file_nav: FileNavigator,
     pub search_nav: FileNavigator,
+    pub state: AppState,
     pub config: Config,
     pub song: Option<Song>,
-    pub searching: bool,
     pub input: String,
     pub path: Vec<String>,
-    pub transposing: bool,
 }
 
 impl<'a> App {
@@ -148,18 +160,16 @@ impl<'a> App {
     }
 
     pub fn get_nav(&self) -> &FileNavigator {
-        if self.searching {
-            &self.search_nav
-        } else {
-            &self.file_nav
+        match self.state {
+            AppState::Searching => &self.search_nav,
+            _ => &self.file_nav,
         }
     }
 
     pub fn get_nav_mut(&mut self) -> &mut FileNavigator {
-        if self.searching {
-            &mut self.search_nav
-        } else {
-            &mut self.file_nav
+        match self.state {
+            AppState::Searching => &mut self.search_nav,
+            _ => &mut self.file_nav,
         }
     }
 }

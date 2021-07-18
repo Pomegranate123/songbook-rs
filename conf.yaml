@@ -46,6 +46,7 @@ keybinds:
   col_size_inc: End
   col_size_dec: Home
   search: /
+  transpose: t
   quit: Ctrl+c
 icons:
   folder: " "

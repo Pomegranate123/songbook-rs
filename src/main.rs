@@ -5,7 +5,7 @@ mod ui;
 mod util;
 
 use crate::{
-    app::App,
+    app::{App, AppState},
     conf::Config,
     util::{Event, Events},
 };
@@ -97,20 +97,60 @@ fn main() -> Result<(), Box<dyn Error>> {
                 .constraints([Constraint::Max(100), Constraint::Length(3)])
                 .split(layout[0]);
 
-            if app.searching {
-                ui::draw_song_list(f, &mut app, left_bar[0]);
-                ui::draw_search_bar(f, &mut app, left_bar[1]);
-            } else {
-                ui::draw_song_list(f, &mut app, layout[0]);
+            match app.state {
+                AppState::Default => ui::draw_song_list(f, &mut app, layout[0]),
+                AppState::Searching => {
+                    ui::draw_song_list(f, &mut app, left_bar[0]);
+                    ui::draw_search_bar(f, &mut app, left_bar[1]);
+                }
+                AppState::Transposing => {
+                    ui::draw_song_list(f, &mut app, left_bar[0]);
+                    ui::draw_transposition(f, &mut app, left_bar[1]);
+                }
             }
             ui::draw_song(f, &app, layout[1]);
-            if app.transposing {
-                ui::draw_transposition(f, &mut app, left_bar[1])
-            }
         })?;
 
         match events.next()? {
             Event::Input(key) => {
+                if key == *app.config.keybinds.quit {
+                    break;
+                }
+                match app.state {
+                    AppState::Default => {
+                        if key == *app.config.keybinds.search {
+                            app.state = AppState::Searching
+                        } else if key == *app.config.keybinds.transpose {
+                            app.state = AppState::Transposing;
+                        }
+                    }
+                    AppState::Searching => {
+                        if key == Key::Esc {
+                            app.state = AppState::Default
+                        }
+                        match key {
+                            Key::Char(c) => match c {
+                                '\n' => (),
+                                _ => {
+                                    app.input.push(c);
+                                    app.search();
+                                }
+                            },
+                            Key::Backspace => {
+                                app.input.pop();
+                                app.search();
+                            }
+                            _ => (),
+                        }
+                    }
+                    AppState::Transposing => {
+                        if key == Key::Esc {
+                            app.state = AppState::Default
+                        } else if key == *app.config.keybinds.search {
+                            app.state = AppState::Searching
+                        }
+                    }
+                }
                 if key == *app.config.keybinds.down {
                     app.get_nav_mut().forward(1);
                     if app.config.auto_select_song {
@@ -137,30 +177,10 @@ fn main() -> Result<(), Box<dyn Error>> {
                     app.get_nav_mut().path_back()
                 } else if key == *app.config.keybinds.col_size_inc {
                     app.config.extra_column_size += 1;
-                } else if key == *app.config.keybinds.col_size_dec {
-                    if app.config.extra_column_size > 0 {
-                        app.config.extra_column_size -= 1;
-                    }
-                } else if key == *app.config.keybinds.search {
-                    app.searching = true
-                } else if key == *app.config.keybinds.quit {
-                    break;
-                } else if app.searching {
-                    match key {
-                        Key::Char(c) => match c {
-                            '\n' => (),
-                            _ => {
-                                app.input.push(c);
-                                app.search();
-                            }
-                        },
-                        Key::Backspace => {
-                            app.input.pop();
-                            app.search();
-                        }
-                        Key::Esc => app.searching = false,
-                        _ => (),
-                    }
+                } else if key == *app.config.keybinds.col_size_dec
+                    && app.config.extra_column_size > 0
+                {
+                    app.config.extra_column_size -= 1;
                 }
             }
             Event::Tick => (),

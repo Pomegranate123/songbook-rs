@@ -70,37 +70,46 @@ where
     }
 
     // Add cursor if search box is selected
-    let mut input = vec![Span::from(inputtext)];
-    if app.searching {
-        input.push(Span::styled("|", app.config.theme.selected.to_style()))
-    }
+    let input = vec![
+        Span::from(inputtext),
+        Span::styled("|", app.config.theme.selected.to_style()),
+    ];
 
     // Create search box
     let searchbox = Paragraph::new(Text::from(Spans::from(input))).block(
         Block::default()
             .borders(Borders::ALL)
-            .border_style(if app.searching {
-                app.config.theme.selected.to_style()
-            } else {
-                Style::default()
-            })
+            .border_style(app.config.theme.selected.to_style())
             .title(Span::from("Search")),
     );
 
     f.render_widget(searchbox, layout_chunk);
 }
 
-pub fn draw_transposition<B>(_f: &mut Frame<B>, _app: &mut App, _layout_chunk: Rect)
+pub fn draw_transposition<B>(f: &mut Frame<B>, app: &mut App, layout_chunk: Rect)
 where
     B: Backend,
 {
-    todo!()
+    let transpose_block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(app.config.theme.selected.to_style())
+        .title(Span::from("Transpose"));
+
+    let transpose = Paragraph::new(Text::from(match &app.song {
+        Some(song) => match song.key {
+            Some(key) => key.to_string(),
+            None => String::from("No key found"),
+        },
+        None => String::from("No song selected"),
+    }))
+    .block(transpose_block);
     //    match &app.song {
     //        Some(song) => {
     //            let key_block = List::new()
     //        }
     //        None => (),
     //    }
+    f.render_widget(transpose, layout_chunk)
 }
 
 pub fn draw_song<B>(f: &mut Frame<B>, app: &App, layout_chunk: Rect)
