@@ -286,8 +286,14 @@ impl Song {
                                 }
                             }
                             "Capo-Bass_Guitar" => {
-                                song.transposition -=
-                                    cap.get(2).unwrap().as_str().trim().parse::<i32>().unwrap()
+                                let diff =
+                                    cap.get(2).unwrap().as_str().trim().parse::<i32>().unwrap();
+                                song.transposition -= diff;
+                                if let Some(key) = song.key {
+                                    song.key = Some(PitchClass::from_u8(
+                                        (key.into_u8() as i32 - diff + 12) as u8 % 12,
+                                    ))
+                                }
                             }
                             "c" => blocks
                                 .append(&mut Song::parse_comment(cap.get(2).unwrap().as_str())),
