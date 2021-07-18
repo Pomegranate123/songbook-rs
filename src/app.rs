@@ -2,12 +2,19 @@ use crate::{
     conf::Config,
     parser::{Playlist, Song},
 };
+use lazy_static::lazy_static;
+use regex::Regex;
+use rust_music_theory::note::PitchClass;
 use std::{
     collections::HashMap,
     fs::{self, DirEntry},
     path::{Path, PathBuf},
 };
 use tui::widgets::ListState;
+
+lazy_static! {
+    static ref RE_SONG_TRANSPOSITION: Regex = Regex::new(r" \[([ABCDEFG][b#]?)\]").unwrap();
+}
 
 #[derive(Default)]
 pub struct App {
@@ -43,20 +50,28 @@ impl<'a> App {
     pub fn load_selected(&mut self) {
         let file = self.get_nav().selected().cloned();
         if let Some(file) = file {
-            match file {
+            match &file {
                 FileType::Folder(path) => self.get_nav_mut().open_path(&path),
-                FileType::Song(_) => {
-                    self.song = Some(Song::from(
-                        self.files
-                            .get(&file)
-                            .unwrap_or(&String::from("{title:Song not found}"))
-                            .clone(),
-                    ))
-                }
                 FileType::Playlist(_) => {
                     let playlist = Playlist::from(self.files.get(&file).unwrap());
                     self.get_nav_mut().open_playlist(playlist)
                 }
+                FileType::Song(name) => match self.files.get(&file) {
+                    Some(song) => self.song = Some(Song::from(song.clone())),
+                    None => {
+                        if let Some(key) = RE_SONG_TRANSPOSITION.captures(&name) {
+                            let actual_name = RE_SONG_TRANSPOSITION.replace(&name, "");
+                            if let Some(song) =
+                                self.files.get(&FileType::Song(actual_name.to_string()))
+                            {
+                                self.song = Some(Song::in_key(
+                                    song.clone(),
+                                    PitchClass::from_str(key.get(1).unwrap().as_str()).unwrap(),
+                                ))
+                            }
+                        }
+                    }
+                },
             }
         }
     }
