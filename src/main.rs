@@ -79,7 +79,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let mut term = Terminal::new(backend)?;
     let events = Events::with_config(util::Config {
-        exit_key: *config.keybinds.quit,
+        exit_key: config.keybinds.quit.to_key(),
         tick_rate: Duration::from_millis(250),
     });
 
@@ -113,16 +113,18 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         match events.next()? {
             Event::Input(key) => {
-                if key == *app.config.keybinds.quit {
+                if key == app.config.keybinds.quit.to_key() {
                     break;
                 }
                 match app.state {
                     AppState::Default => {
-                        if key == *app.config.keybinds.search {
+                        if key == app.config.keybinds.search.to_key() {
                             app.state = AppState::Searching
-                        } else if key == *app.config.keybinds.transpose {
+                        } else if key == app.config.keybinds.transpose.to_key() {
                             app.state = AppState::Transposing;
                         }
+                        keybinds_songlist(&key, &mut app);
+                        keybinds_song(&key, &mut app);
                     }
                     AppState::Searching => {
                         if key == Key::Esc {
@@ -142,49 +144,66 @@ fn main() -> Result<(), Box<dyn Error>> {
                             }
                             _ => (),
                         }
+                        keybinds_songlist(&key, &mut app);
+                        keybinds_song(&key, &mut app);
                     }
                     AppState::Transposing => {
                         if key == Key::Esc {
                             app.state = AppState::Default
-                        } else if key == *app.config.keybinds.search {
+                        } else if key == app.config.keybinds.search.to_key() {
                             app.state = AppState::Searching
+                        } else if key == app.config.keybinds.next.to_key() {
+                            if let Some(song) = &mut app.song {
+                                song.change_key(1)
+                            }
+                        } else if key == app.config.keybinds.back.to_key() {
+                            if let Some(song) = &mut app.song {
+                                song.change_key(-1)
+                            }
                         }
+                        keybinds_song(&key, &mut app);
                     }
-                }
-                if key == *app.config.keybinds.down {
-                    app.get_nav_mut().forward(1);
-                    if app.config.auto_select_song {
-                        app.load_selected_song()
-                    }
-                } else if key == *app.config.keybinds.up {
-                    app.get_nav_mut().back(1);
-                    if app.config.auto_select_song {
-                        app.load_selected_song()
-                    }
-                } else if key == *app.config.keybinds.jump_down {
-                    app.get_nav_mut().forward(20);
-                    if app.config.auto_select_song {
-                        app.load_selected_song()
-                    }
-                } else if key == *app.config.keybinds.jump_up {
-                    app.get_nav_mut().back(20);
-                    if app.config.auto_select_song {
-                        app.load_selected_song()
-                    }
-                } else if key == *app.config.keybinds.next {
-                    app.load_selected()
-                } else if key == *app.config.keybinds.back {
-                    app.get_nav_mut().path_back()
-                } else if key == *app.config.keybinds.col_size_inc {
-                    app.config.extra_column_size += 1;
-                } else if key == *app.config.keybinds.col_size_dec
-                    && app.config.extra_column_size > 0
-                {
-                    app.config.extra_column_size -= 1;
                 }
             }
             Event::Tick => (),
         }
     }
     Ok(())
+}
+
+fn keybinds_songlist(key: &Key, app: &mut App) {
+    if key == &app.config.keybinds.down.to_key() {
+        app.get_nav_mut().forward(1);
+        if app.config.auto_select_song {
+            app.load_selected_song()
+        }
+    } else if key == &app.config.keybinds.up.to_key() {
+        app.get_nav_mut().back(1);
+        if app.config.auto_select_song {
+            app.load_selected_song()
+        }
+    } else if key == &app.config.keybinds.jump_down.to_key() {
+        app.get_nav_mut().forward(20);
+        if app.config.auto_select_song {
+            app.load_selected_song()
+        }
+    } else if key == &app.config.keybinds.jump_up.to_key() {
+        app.get_nav_mut().back(20);
+        if app.config.auto_select_song {
+            app.load_selected_song()
+        }
+    } else if key == &app.config.keybinds.next.to_key() {
+        app.load_selected()
+    } else if key == &app.config.keybinds.back.to_key() {
+        app.get_nav_mut().path_back()
+    }
+}
+
+fn keybinds_song(key: &Key, app: &mut App) {
+    if key == &app.config.keybinds.col_size_inc.to_key() {
+        app.config.extra_column_size += 1;
+    } else if key == &app.config.keybinds.col_size_dec.to_key() && app.config.extra_column_size > 0
+    {
+        app.config.extra_column_size -= 1;
+    }
 }

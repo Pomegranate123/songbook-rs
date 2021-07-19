@@ -188,11 +188,9 @@ impl Default for ConfStyle {
 #[derive(Clone)]
 pub struct SerDeKey(Key);
 
-impl std::ops::Deref for SerDeKey {
-    type Target = Key;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
+impl SerDeKey {
+    pub fn to_key(&self) -> Key {
+        self.0
     }
 }
 

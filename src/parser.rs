@@ -200,10 +200,10 @@ impl Song {
         Song::new(songstring, Some(key))
     }
 
-    pub fn change_key(song: &mut Song, key: PitchClass) {
-        let old_key = song.key.unwrap();
-        let transposition = old_key.into_u8() as i32 - key.into_u8() as i32;
-        song.content = song
+    pub fn change_key(&mut self, transposition: i32) {
+        let old_key = self.key.unwrap();
+        let interval = Interval::from_semitone(((transposition + 12) % 12) as u8).unwrap();
+        self.content = self
             .content
             .iter()
             .map(|line| {
@@ -224,10 +224,7 @@ impl Song {
                                                             caps.get(0).unwrap().as_str(),
                                                         )
                                                         .unwrap(),
-                                                        Interval::from_semitone(
-                                                            ((transposition + 12) % 12) as u8,
-                                                        )
-                                                        .unwrap(),
+                                                        interval,
                                                     )
                                                     .to_string()
                                                 });
@@ -243,7 +240,7 @@ impl Song {
                 )
             })
             .collect();
-        song.key = Some(key);
+        self.key = Some(PitchClass::from_interval(old_key, interval));
     }
 
     fn new(songstring: String, key: Option<PitchClass>) -> Self {
