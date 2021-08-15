@@ -38,7 +38,7 @@ impl SongBlock {
                 .map(|part| match RE_CHORDS.captures(&part) {
                     Some(chord) => {
                         let chord = chord.get(1).unwrap().as_str();
-                        let transposed = RE_ROOT_NOTE.replace(chord, |caps: &Captures| {
+                        let transposed = RE_ROOT_NOTE.replace_all(chord, |caps: &Captures| {
                             PitchClass::from_interval(
                                 PitchClass::from_str(caps.get(0).unwrap().as_str()).unwrap(),
                                 Interval::from_semitone(((transposition + 12) % 12) as u8).unwrap(),
@@ -217,8 +217,9 @@ impl Song {
                                     .iter()
                                     .map(|string| match string {
                                         SongString::Chord(chord) => {
-                                            let transposed =
-                                                RE_ROOT_NOTE.replace(&chord, |caps: &Captures| {
+                                            let transposed = RE_ROOT_NOTE.replace_all(
+                                                &chord,
+                                                |caps: &Captures| {
                                                     PitchClass::from_interval(
                                                         PitchClass::from_str(
                                                             caps.get(0).unwrap().as_str(),
@@ -227,7 +228,8 @@ impl Song {
                                                         interval,
                                                     )
                                                     .to_string()
-                                                });
+                                                },
+                                            );
                                             SongString::Chord(transposed.to_string())
                                         }
                                         s => s.clone(), //TODO: remove .clone() call?
