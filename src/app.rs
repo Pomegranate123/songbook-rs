@@ -123,14 +123,25 @@ impl<'a> App {
                 if path.is_dir() {
                     Some((FileType::Folder(path), String::new()))
                 } else {
-                    let extension = path.extension().unwrap().to_str().unwrap();
+                    let extension = path.extension().unwrap_or_default().to_str().unwrap();
                     if extension == "txt" {
-                        let filestring = fs::read_to_string(file.path()).unwrap();
-                        Some((FileType::Song(Song::get_name(&filestring)), filestring))
-                    } else if extension == "lst" {
-                        let filestring = fs::read_to_string(file.path()).unwrap();
+                        let filestring = fs::read_to_string(path).unwrap_or_default();
                         Some((
-                            FileType::Playlist(Playlist::get_name(&filestring)),
+                            FileType::Song(
+                                Song::get_name(&filestring).unwrap_or_else(|| {
+                                    file.file_name().to_str().unwrap().to_string()
+                                }),
+                            ),
+                            filestring,
+                        ))
+                    } else if extension == "lst" {
+                        let filestring = fs::read_to_string(path).unwrap_or_default();
+                        Some((
+                            FileType::Playlist(
+                                Playlist::get_name(&filestring).unwrap_or_else(|| {
+                                    file.file_name().to_str().unwrap().to_string()
+                                }),
+                            ),
                             filestring,
                         ))
                     } else {
@@ -143,20 +154,22 @@ impl<'a> App {
 
     // Gets all DirEntry's that are not a folder
     fn get_direntries(path: &Path) -> Vec<DirEntry> {
-        fs::read_dir(path)
-            .unwrap()
-            .flat_map(|dir| {
-                let dir = dir.unwrap();
-                let path = dir.path();
-                if path.is_dir() {
-                    let mut dirs = App::get_direntries(&path);
-                    dirs.push(dir);
-                    dirs
-                } else {
-                    vec![dir]
-                }
-            })
-            .collect()
+        let dir = match fs::read_dir(path) {
+            Ok(d) => d,
+            Err(_) => return vec![],
+        };
+        dir.flat_map(|dir| {
+            let dir = dir.unwrap();
+            let path = dir.path();
+            if path.is_dir() {
+                let mut dirs = App::get_direntries(&path);
+                dirs.push(dir);
+                dirs
+            } else {
+                vec![dir]
+            }
+        })
+        .collect()
     }
 
     pub fn get_nav(&self) -> &FileNavigator {
@@ -188,13 +201,15 @@ impl FileType {
         if path.is_dir() {
             Ok(FileType::Folder(path))
         } else if name.ends_with(".txt") {
-            Ok(FileType::Song(Song::get_name(
-                &fs::read_to_string(path).unwrap(),
-            )))
+            Ok(FileType::Song(
+                Song::get_name(&fs::read_to_string(&path).unwrap())
+                    .unwrap_or_else(|| name.to_string()),
+            ))
         } else if name.ends_with(".lst") {
-            Ok(FileType::Playlist(Playlist::get_name(
-                &fs::read_to_string(path).unwrap(),
-            )))
+            Ok(FileType::Playlist(
+                Playlist::get_name(&fs::read_to_string(&path).unwrap())
+                    .unwrap_or_else(|| name.to_string()),
+            ))
         } else {
             Err("Unable to parse DirEntry to File")
         }
@@ -218,7 +233,12 @@ pub struct Folder {
 
 impl Folder {
     fn from_path(path: &Path) -> Folder {
-        let name = path.file_name().unwrap().to_str().unwrap().to_string();
+        let name = path
+            .file_name()
+            .unwrap_or_else(|| path.as_os_str())
+            .to_str()
+            .unwrap()
+            .to_string();
         let mut files: Vec<FileType> = fs::read_dir(path)
             .unwrap()
             .filter_map(|dir| FileType::from_dir_entry(dir.unwrap()).ok())
@@ -267,7 +287,7 @@ impl Folder {
 
     fn selected(&self) -> Option<&FileType> {
         if let Some(index) = self.state.selected() {
-            return Some(&self.files[index]);
+            return self.files.get(index);
         }
         None
     }

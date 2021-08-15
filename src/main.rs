@@ -10,7 +10,7 @@ use crate::{
     util::{Event, Events},
 };
 use getopts::Options;
-use std::{env, error::Error, io, time::Duration};
+use std::{env, error::Error, io, path::PathBuf, time::Duration};
 use termion::{event::Key, raw::IntoRawMode};
 use tui::{
     backend::TermionBackend,
@@ -47,7 +47,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
 
     if let Some(arg) = matches.opt_str("default-config") {
-        let path = std::path::PathBuf::from(&arg);
+        let path = PathBuf::from(&arg);
         Config::write_default(&path)?;
         println!("Default config has been written to {}", path.display());
         return Ok(());
@@ -55,16 +55,21 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let config = match matches.opt_str("c") {
         Some(arg) => {
-            let path = std::path::PathBuf::from(&arg);
+            let path = PathBuf::from(&arg);
             if !path.exists() {
                 panic!("Path '{}' doesn't exist", arg)
             }
             Config::load(&path)?
         }
         None => {
-            let config_path = env::var("GPRO_CONFIG")
-                .unwrap_or_else(|_| String::from("/home/pomegranate/git/gpro-rs/conf.yml"));
-            Config::load(&std::path::PathBuf::from(config_path)).unwrap_or_default()
+            let config_path = match env::var("GPRO_CONFIG") {
+                Ok(path) => path,
+                Err(_) => match env::var("XDG_CONFIG_HOME") {
+                    Ok(config_path) => config_path + "/gpro/config.yml",
+                    Err(_) => String::new(),
+                },
+            };
+            Config::load(&PathBuf::from(config_path)).unwrap_or_default()
         }
     };
 

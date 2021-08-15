@@ -350,19 +350,24 @@ impl Song {
         result
     }
 
-    pub fn get_name(songstring: &str) -> String {
+    pub fn get_name(songstring: &str) -> Option<String> {
         let songstring = RE_SPACES.replace_all(songstring, " ");
         let title = match RE_TITLE.captures(&songstring) {
-            Some(cap) => cap.get(1).unwrap().as_str().trim().to_owned(),
-            None => String::from("Untitled"),
+            Some(cap) => Some(cap.get(1).unwrap().as_str().trim().to_owned()),
+            None => None,
         };
         let subtitle = match RE_SUBTITLE.captures(&songstring) {
-            Some(cap) => String::from(" - ") + cap.get(1).unwrap().as_str().trim(),
-            None => String::new(),
+            Some(cap) => Some(cap.get(1).unwrap().as_str().trim()),
+            None => None,
         };
 
-        let title = title + &subtitle;
-        RE_SPACES.replace_all(&title, " ").to_string()
+        let title = match (title, subtitle) {
+            (Some(t), Some(st)) => format!("{} - {}", t, st),
+            (Some(t), None) => format!("{}", t),
+            (None, Some(st)) => format!("{}", st),
+            (None, None) => return None,
+        };
+        Some(RE_SPACES.replace_all(&title, " ").to_string())
     }
 }
 
@@ -381,7 +386,10 @@ impl Playlist {
         }
     }
 
-    pub fn get_name(playliststring: &str) -> String {
-        playliststring.lines().next().unwrap().to_string()
+    pub fn get_name(playliststring: &str) -> Option<String> {
+        match playliststring.lines().next() {
+            Some(line) => Some(line.to_string()),
+            None => None,
+        }
     }
 }
