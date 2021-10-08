@@ -56,6 +56,14 @@ where
     );
 }
 
+pub fn draw_editor<B>(f: &mut Frame<B>, app: &mut App, layout_chunk: Rect)
+where
+    B: Backend,
+{
+    app.song = Some(Song::from(app.file.clone() + "|"));
+    draw_song(f, app, layout_chunk);
+}
+
 pub fn draw_search_bar<B>(f: &mut Frame<B>, app: &mut App, layout_chunk: Rect)
 where
     B: Backend,
@@ -103,12 +111,6 @@ where
         None => String::from("No song selected"),
     }))
     .block(transpose_block);
-    //    match &app.song {
-    //        Some(song) => {
-    //            let key_block = List::new()
-    //        }
-    //        None => (),
-    //    }
     f.render_widget(transpose, layout_chunk)
 }
 

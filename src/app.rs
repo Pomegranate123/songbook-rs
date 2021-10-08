@@ -21,6 +21,7 @@ pub enum AppState {
     Default,
     Searching,
     Transposing,
+    Editing,
 }
 
 impl Default for AppState {
@@ -39,6 +40,7 @@ pub struct App {
     pub song: Option<Song>,
     pub input: String,
     pub path: Vec<String>,
+    pub file: String,
 }
 
 impl<'a> App {

@@ -112,6 +112,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                     ui::draw_song_list(f, &mut app, left_bar[0]);
                     ui::draw_transposition(f, &mut app, left_bar[1]);
                 }
+                AppState::Editing => ui::draw_editor(f, &mut app, f.size()),
             }
             ui::draw_song(f, &app, layout[1]);
         })?;
@@ -127,6 +128,8 @@ fn main() -> Result<(), Box<dyn Error>> {
                             app.state = AppState::Searching
                         } else if key == app.config.keybinds.transpose.to_key() {
                             app.state = AppState::Transposing;
+                        } else if key == Key::Char('e') {
+                            app.state = AppState::Editing;
                         }
                         keybinds_songlist(&key, &mut app);
                         keybinds_song(&key, &mut app);
@@ -167,6 +170,20 @@ fn main() -> Result<(), Box<dyn Error>> {
                             }
                         }
                         keybinds_song(&key, &mut app);
+                    }
+                    AppState::Editing => {
+                        if key == Key::Esc {
+                            app.state = AppState::Default
+                        }
+                        match key {
+                            Key::Char(c) => {
+                                app.file.push(c);
+                            }
+                            Key::Backspace => {
+                                app.file.pop();
+                            }
+                            _ => (),
+                        }
                     }
                 }
             }
