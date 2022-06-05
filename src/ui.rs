@@ -140,7 +140,7 @@ where
             let song_layout = Layout::default()
                 .direction(Direction::Horizontal)
                 .margin(1)
-                .constraints(constraints.as_ref())
+                .constraints(constraints)
                 .split(layout_chunk);
 
             for (i, column) in song_layout.iter().enumerate() {

@@ -6,6 +6,7 @@ use lazy_static::lazy_static;
 use regex::Regex;
 use rust_music_theory::note::PitchClass;
 use std::{
+    env,
     collections::HashMap,
     fs::{self, DirEntry},
     path::{Path, PathBuf},
@@ -59,6 +60,11 @@ impl<'a> App {
             config,
             ..Default::default()
         }
+    }
+
+    pub fn edit_selected_song(&self) {
+        let editor = env::var("EDITOR");
+
     }
 
     pub fn load_selected(&mut self) {

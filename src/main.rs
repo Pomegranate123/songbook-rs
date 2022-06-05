@@ -103,18 +103,25 @@ fn main() -> Result<(), Box<dyn Error>> {
                 .split(layout[0]);
 
             match app.state {
-                AppState::Default => ui::draw_song_list(f, &mut app, layout[0]),
+                AppState::Default => {
+                    ui::draw_song_list(f, &mut app, layout[0]);
+                    ui::draw_song(f, &app, layout[1]);
+                }
                 AppState::Searching => {
                     ui::draw_song_list(f, &mut app, left_bar[0]);
                     ui::draw_search_bar(f, &mut app, left_bar[1]);
+                    ui::draw_song(f, &app, layout[1]);
                 }
                 AppState::Transposing => {
                     ui::draw_song_list(f, &mut app, left_bar[0]);
                     ui::draw_transposition(f, &mut app, left_bar[1]);
+                    ui::draw_song(f, &app, layout[1]);
                 }
-                AppState::Editing => ui::draw_editor(f, &mut app, f.size()),
+                AppState::Editing => {
+                    ui::draw_song_list(f, &mut app, layout[0]);
+                    ui::draw_editor(f, &mut app, layout[1]);
+                }
             }
-            ui::draw_song(f, &app, layout[1]);
         })?;
 
         match events.next()? {
@@ -129,7 +136,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                         } else if key == app.config.keybinds.transpose.to_key() {
                             app.state = AppState::Transposing;
                         } else if key == Key::Char('e') {
-                            app.state = AppState::Editing;
+                            app.edit_selected_song();
                         }
                         keybinds_songlist(&key, &mut app);
                         keybinds_song(&key, &mut app);
@@ -173,7 +180,8 @@ fn main() -> Result<(), Box<dyn Error>> {
                     }
                     AppState::Editing => {
                         if key == Key::Esc {
-                            app.state = AppState::Default
+                            app.state = AppState::Default;
+                            continue;
                         }
                         match key {
                             Key::Char(c) => {
