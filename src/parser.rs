@@ -12,7 +12,7 @@ lazy_static! {
     static ref RE_TAGS: Regex = Regex::new(r"\{([^\{\}\n]+?)(?::([^\{\}\n]+))?\}\n?").unwrap();
     static ref RE_TITLE: Regex = Regex::new(r"\{(?:title|t)(?::([^\{\}\n]+))?\}\n?").unwrap();
     static ref RE_SUBTITLE: Regex =
-        Regex::new(r"\{(?:subtitle|st)(?::([^\{\}\n]+))?\}\n?").unwrap();
+        Regex::new(r"\{(?:subtitle|st|artist)(?::([^\{\}\n]+))?\}\n?").unwrap();
     static ref RE_CHORDS: Regex = Regex::new(r"\[([^\n\[\]]*)\]").unwrap();
     static ref RE_ROOT_NOTE: Regex = Regex::new(r"[ABCDEFG][b#]?").unwrap();
     static ref RE_SPACES: Regex = Regex::new(r" +").unwrap();

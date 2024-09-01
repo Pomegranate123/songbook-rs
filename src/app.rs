@@ -6,8 +6,8 @@ use lazy_static::lazy_static;
 use regex::Regex;
 use rust_music_theory::note::PitchClass;
 use std::{
-    env,
     collections::HashMap,
+    env,
     fs::{self, DirEntry},
     path::{Path, PathBuf},
 };
@@ -40,7 +40,7 @@ pub struct App {
     pub config: Config,
     pub song: Option<Song>,
     pub input: String,
-    pub path: Vec<String>,
+    path: Vec<String>,
     pub file: String,
 }
 
@@ -64,7 +64,6 @@ impl<'a> App {
 
     pub fn edit_selected_song(&self) {
         let editor = env::var("EDITOR");
-
     }
 
     pub fn load_selected(&mut self) {
@@ -132,7 +131,7 @@ impl<'a> App {
                     Some((FileType::Folder(path), String::new()))
                 } else {
                     let extension = path.extension().unwrap_or_default().to_str().unwrap();
-                    if extension == "txt" {
+                    if extension == "txt" || extension == "pro" {
                         let filestring = fs::read_to_string(path).unwrap_or_default();
                         Some((
                             FileType::Song(
